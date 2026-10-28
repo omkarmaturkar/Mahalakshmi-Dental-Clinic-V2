@@ -4,6 +4,7 @@ package com.mahalakshmi.dental
 
 import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -45,7 +46,7 @@ data class Medicine(val name: String, val dose: String = "", val timing: String 
 data class Prescription(
     val id: Long = 0,
     val patientId: Long,
-    val visitId: Long,
+    val visitId: Long = 0,
     val date: Long = System.currentTimeMillis(),
     val diagnosis: String = "",
     val medicines: List<Medicine> = emptyList(),
@@ -100,17 +101,25 @@ private fun medicinesFromJson(text: String?): List<Medicine> = try {
 }
 
 // ───────────── Database ─────────────
-fun ClinicDb.getPrescription(visitId: Long): Prescription? =
+private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice"
+
+private fun rxFrom(c: Cursor) = Prescription(
+    id = c.getLong(0), patientId = c.getLong(1), visitId = c.getLong(2), date = c.getLong(3),
+    diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: ""
+)
+
+fun ClinicDb.getPrescriptionById(id: Long): Prescription? =
+    readableDatabase.rawQuery("SELECT $RX_COLS FROM prescriptions WHERE id = ?", arrayOf(id.toString()))
+        .use { c -> if (c.moveToFirst()) rxFrom(c) else null }
+
+fun ClinicDb.prescriptionsOf(patientId: Long): List<Prescription> {
+    val list = mutableListOf<Prescription>()
     readableDatabase.rawQuery(
-        "SELECT id, patient_id, visit_id, date, diagnosis, medicines, advice FROM prescriptions " +
-            "WHERE visit_id = ? ORDER BY id DESC LIMIT 1",
-        arrayOf(visitId.toString())
-    ).use { c ->
-        if (!c.moveToFirst()) null else Prescription(
-            id = c.getLong(0), patientId = c.getLong(1), visitId = c.getLong(2), date = c.getLong(3),
-            diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: ""
-        )
-    }
+        "SELECT $RX_COLS FROM prescriptions WHERE patient_id = ? ORDER BY date DESC, id DESC",
+        arrayOf(patientId.toString())
+    ).use { c -> while (c.moveToNext()) list.add(rxFrom(c)) }
+    return list
+}
 
 fun ClinicDb.savePrescription(rx: Prescription): Long {
     val cv = ContentValues().apply {
@@ -133,6 +142,7 @@ fun ClinicDb.deletePrescription(id: Long) {
     writableDatabase.delete("prescriptions", "id = ?", arrayOf(id.toString()))
 }
 
+// Used by older screens
 fun ClinicDb.prescribedVisitIds(patientId: Long): Set<Long> {
     val set = HashSet<Long>()
     readableDatabase.rawQuery("SELECT visit_id FROM prescriptions WHERE patient_id = ?", arrayOf(patientId.toString()))
@@ -170,23 +180,26 @@ fun ClinicDb.deleteRxTemplate(id: Long) {
     writableDatabase.delete("rx_templates", "id = ?", arrayOf(id.toString()))
 }
 
-private fun defaultDiagnosis(v: Visit): String {
-    val treatments = v.treatments.joinToString(", ")
-    if (treatments.isBlank()) return ""
-    return if (v.teethList.isEmpty()) treatments else "$treatments (tooth ${v.teethList.joinToString(", ")})"
+/** Today's treatments, written as a diagnosis line, e.g. "Root Canal (tooth 36)". */
+private fun ClinicDb.suggestedDiagnosis(patientId: Long): String {
+    val today = startOfToday()
+    return treatmentsOf(patientId)
+        .filter { it.status == STATUS_ONGOING || (it.status == STATUS_DONE && it.doneAt >= today) }
+        .joinToString(", ") { t -> if (t.teethList.isEmpty()) t.name else "${t.name} (tooth ${t.teethList.joinToString(", ")})" }
 }
 
 // ───────────── Prescription screen ─────────────
 @Composable
-fun PrescriptionScreen(db: ClinicDb, patientId: Long, visitId: Long, onBack: () -> Unit) {
+fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> Unit) {
     val notify = LocalNotify.current
     val patient = remember { db.getPatient(patientId) }
-    val visit = remember { db.getVisit(visitId) }
-    if (patient == null || visit == null) return
-    val existing = remember { db.getPrescription(visitId) }
+    val existing = remember { if (rxId != 0L) db.getPrescriptionById(rxId) else null }
+    if (patient == null || (rxId != 0L && existing == null)) return
+    val suggested = remember { if (existing == null) db.suggestedDiagnosis(patientId) else "" }
+    val createdAt = remember { existing?.date ?: System.currentTimeMillis() }
 
-    var rxId by remember { mutableLongStateOf(existing?.id ?: 0L) }
-    var diagnosis by remember { mutableStateOf(existing?.diagnosis ?: defaultDiagnosis(visit)) }
+    var currentId by remember { mutableLongStateOf(existing?.id ?: 0L) }
+    var diagnosis by remember { mutableStateOf(existing?.diagnosis ?: suggested) }
     val medicines = remember { mutableStateListOf<Medicine>().apply { addAll(existing?.medicines ?: emptyList()) } }
     var advice by remember { mutableStateOf(existing?.advice ?: "") }
     var templates by remember { mutableStateOf(db.rxTemplates()) }
@@ -198,12 +211,13 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, visitId: Long, onBack: () 
     val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank()
 
     fun save() {
-        rxId = db.savePrescription(
+        currentId = db.savePrescription(
             Prescription(
-                id = rxId, patientId = patientId, visitId = visitId, date = existing?.date ?: visit.date,
+                id = currentId, patientId = patientId, visitId = existing?.visitId ?: 0L, date = createdAt,
                 diagnosis = diagnosis.trim(), medicines = medicines.toList(), advice = advice.trim()
             )
         )
+        if (existing == null) db.markArrived(patientId)
         DataBus.changed()
     }
 
@@ -230,7 +244,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, visitId: Long, onBack: () 
                         )
                         val info = listOf(
                             patient.gender, if (patient.age.isNotBlank()) "${patient.age} yrs" else "",
-                            "Visit ${fmtDate(visit.date)}"
+                            "Date ${fmtDate(createdAt)}"
                         ).filter { it.isNotBlank() }.joinToString("  ·  ")
                         Text(info, fontSize = 12.sp, color = Brand.Sub)
                     }
@@ -349,7 +363,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, visitId: Long, onBack: () 
                 }
             }
             BottomActionBar {
-                if (rxId != 0L) {
+                if (currentId != 0L) {
                     CircleIconButton(Icons.Filled.Delete, { askDelete = true }, bg = Brand.RedSoft, tint = Brand.Red, size = 56.dp)
                 }
                 if (twoColumn) Spacer(Modifier.weight(1f))
@@ -392,10 +406,10 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, visitId: Long, onBack: () 
     }
     if (askDelete) ConfirmDialog(
         "Delete prescription?",
-        "Only the prescription is removed. The visit stays as it is.",
+        "Only this prescription is removed. Treatments and payments are not affected.",
         onConfirm = {
             askDelete = false
-            db.deletePrescription(rxId)
+            db.deletePrescription(currentId)
             DataBus.changed()
             notify("Prescription deleted")
             onBack()
@@ -404,12 +418,13 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, visitId: Long, onBack: () 
     )
     if (share) {
         val first = patient.name.trim().substringBefore(" ")
+        val idForPdf = currentId
         PdfActionsDialog(
             title = "Prescription ready",
             subtitle = "Saved ✓  Send it to ${patient.name} or print it",
             phone = patient.phone,
             message = "Hello $first, here is your prescription from ${db.clinicInfo().name}. Get well soon!",
-            build = { ctx -> prescriptionPdf(ctx, db, visitId) },
+            build = { ctx -> prescriptionPdf(ctx, db, idForPdf) },
             onDismiss = {
                 share = false
                 onBack()
@@ -546,10 +561,10 @@ private fun TemplateNameDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) 
 }
 
 // ───────────── Prescription PDF ─────────────
-fun prescriptionPdf(context: Context, db: ClinicDb, visitId: Long): File {
-    val rx = db.getPrescription(visitId) ?: error("Prescription not found")
+fun prescriptionPdf(context: Context, db: ClinicDb, rxId: Long): File {
+    val rx = db.getPrescriptionById(rxId) ?: error("Prescription not found")
     val patient = db.getPatient(rx.patientId) ?: error("Patient not found")
-    val nextVisit = db.getVisit(visitId)?.nextVisit ?: 0L
+    val next = db.nextBooking(rx.patientId)
     val pdf = PdfBuilder(context, db.clinicInfo())
     pdf.title("PRESCRIPTION", "Date: ${fmtDate(rx.date)}")
     pdf.patientBox(patient)
@@ -602,9 +617,10 @@ fun prescriptionPdf(context: Context, db: ClinicDb, visitId: Long): File {
         pdf.text("Advice", 11f, PdfGreen, 2, after = 3f)
         adviceLines.forEach { pdf.text("•  $it", 10.5f, after = 2f) }
     }
-    if (nextVisit > 0L) {
+    if (next != null) {
+        val whenText = fmtDayLong(next.day) + (if (next.time.isNotBlank()) ", ${next.time}" else "")
         pdf.space(10f)
-        pdf.text("Next visit: ${fmtDayLong(nextVisit)}", 11f, PdfInk, 2)
+        pdf.text("Next visit: $whenText", 11f, PdfInk, 2)
     }
     pdf.signature()
     return pdf.save(pdfFile(context, "Prescription", patient.name))
