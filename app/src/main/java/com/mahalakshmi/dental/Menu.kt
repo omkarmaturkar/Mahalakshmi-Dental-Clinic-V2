@@ -37,6 +37,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
     val context = LocalContext.current
     val version = DataBus.version
     val clinic = remember(version) { db.clinicInfo() }
+    val doctor = remember(version) { db.mainDoctor() }
     val everyone = remember(version) { db.getPatients("") }
     val dueTotal = remember(everyone) { everyone.sumOf { it.remaining.coerceAtLeast(0.0) } }
     val backupOk = remember(version) {
@@ -70,9 +71,8 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
                     clinic.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Brand.Charcoal,
                     maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp
                 )
-                val doctor = listOf(clinic.doctor, clinic.qualification).filter { it.isNotBlank() }.joinToString(", ")
                 Text(
-                    doctor.ifBlank { "Tap to add doctor details" }, fontSize = 12.sp, color = Brand.Sub,
+                    doctor?.title ?: "Tap to add doctors", fontSize = 12.sp, color = Brand.Sub,
                     maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
             }
@@ -88,7 +88,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
                 trailing = if (dueTotal > 0) rs(dueTotal) else null, trailingColor = Brand.Red
             ) { onSelect(Screen.Patients(filter = 1)) }
             MenuHeading("Settings")
-            MenuItem("Clinic & doctor", DocIcons.Settings, active == "clinic") { onSelect(Screen.ClinicSettings) }
+            MenuItem("Clinic & doctors", DocIcons.Settings, active == "clinic") { onSelect(Screen.ClinicSettings) }
             MenuItem("Backup & restore", AppIcons.Cloud, active == "backup", dot = if (backupOk) null else Brand.Gold) {
                 onSelect(Screen.BackupPage)
             }
