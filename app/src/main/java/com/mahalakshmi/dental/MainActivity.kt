@@ -51,7 +51,6 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     var showSplash by remember { mutableStateOf(true) }
-                    // Short welcome (about 1 second), then straight into the app
                     LaunchedEffect(Unit) {
                         delay(1100)
                         showSplash = false
@@ -81,13 +80,15 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen {
     object Home : Screen()
+    object Schedule : Screen()
+    object Finance : Screen()
     object BackupPage : Screen()
     object ClinicSettings : Screen()
     data class Patients(val filter: Int = 0, val focusSearch: Boolean = false) : Screen()
     data class PatientForm(val patientId: Long = 0) : Screen()
     data class PatientDetail(val patientId: Long) : Screen()
 
-    /** Opens the patient file with "Add treatment" ready (used by the "Start" button on Today). */
+    /** Opens the patient file with "Add treatment" ready. */
     data class VisitForm(val patientId: Long, val visitId: Long = 0) : Screen()
 
     /** A prescription: rxId 0 = new one. */
@@ -133,6 +134,13 @@ fun ClinicApp(db: ClinicDb) {
             val menuWidth = if (maxWidth >= 1200.dp) 280.dp else 250.dp
             val entry = NavEntry(stack.size, stack.last())
             val section = stack.getOrNull(1) ?: Screen.Home
+            val tab = when (stack.last()) {
+                is Screen.Home -> "home"
+                is Screen.Patients -> "patients"
+                is Screen.Schedule -> "schedule"
+                is Screen.Finance -> "finance"
+                else -> null
+            }
             val menu: @Composable () -> Unit = {
                 AppMenu(db, section, permanent = wide) { target ->
                     open(target)
@@ -152,7 +160,7 @@ fun ClinicApp(db: ClinicDb) {
                     }
                 }
             } else {
-                // Phone or upright tablet: the menu slides out from the ☰ button
+                // Phone or upright tablet: ☰ menu plus the bottom bar
                 BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
                 ModalNavigationDrawer(
                     drawerState = drawer,
@@ -162,7 +170,12 @@ fun ClinicApp(db: ClinicDb) {
                     }
                 ) {
                     CompositionLocalProvider(LocalMenu provides { scope.launch { drawer.open() } }) {
-                        NavArea(entry) { screen -> ScreenHost(screen, db, stack, go, back, open) }
+                        Column(Modifier.fillMaxSize()) {
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                NavArea(entry) { screen -> ScreenHost(screen, db, stack, go, back, open) }
+                            }
+                            if (tab != null) BottomNavBar(tab) { target -> open(target) }
+                        }
                     }
                 }
             }
@@ -207,6 +220,8 @@ private fun ScreenHost(
 ) {
     when (screen) {
         is Screen.Home -> TodayScreen(db, go)
+        is Screen.Schedule -> ScheduleScreen(db, go)
+        is Screen.Finance -> FinanceScreen(db, go)
         is Screen.Patients -> PatientsScreen(db, screen.filter, screen.focusSearch, go)
         is Screen.BackupPage -> BackupScreen(db, back) { open(null) }
         is Screen.ClinicSettings -> ClinicSettingsScreen(db, back)
