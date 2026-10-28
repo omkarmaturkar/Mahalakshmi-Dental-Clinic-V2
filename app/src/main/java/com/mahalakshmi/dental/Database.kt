@@ -34,6 +34,7 @@ data class Patient(
     val alerts: List<String> get() = medical.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 }
 
+// Old-style visit (kept so older records and backups still open)
 data class Visit(
     val id: Long = 0,
     val patientId: Long,
@@ -61,7 +62,7 @@ data class Stats(
     val patientCount: Int
 )
 
-class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, null, 3) {
+class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, null, 4) {
     companion object { const val NAME = "clinic.db" }
 
     // Keeps all data in one file, which makes backups simple and safe
@@ -69,6 +70,9 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
 
     private val photoFolder by lazy { photoDir(context) }
     private val visitCols = "id, patient_id, date, reason, problem, fees, paid, photos, teeth, next_visit, pay_mode"
+
+    /** A photo saved inside the app, found by its file name. */
+    fun photoFile(name: String): File = File(photoFolder, File(name).name)
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -105,20 +109,68 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
                     "SELECT patient_id, id, paid, date, '' FROM visits WHERE paid > 0"
             )
         }
-        // Version 3: clinic details, prescriptions and prescription templates
         createExtraTables(db)
+        if (oldVersion < 4) moveVisitsIntoPatientFiles(db)
+    }
+
+    // Version 4: every old visit becomes a treatment in the patient file. Nothing is deleted.
+    private fun moveVisitsIntoPatientFiles(db: SQLiteDatabase) {
+        db.execSQL(
+            "INSERT INTO treatments (patient_id, name, teeth, fee, status, doctor_id, notes, created_at, done_at, legacy_visit) " +
+                "SELECT patient_id, CASE WHEN TRIM(IFNULL(reason, '')) = '' THEN 'Dental treatment' ELSE reason END, " +
+                "IFNULL(teeth, ''), IFNULL(fees, 0), 2, 0, IFNULL(problem, ''), date, date, id FROM visits " +
+                "WHERE TRIM(IFNULL(reason, '')) <> '' OR IFNULL(fees, 0) > 0"
+        )
+        db.execSQL(
+            "INSERT INTO case_notes (patient_id, treatment_id, date, text) " +
+                "SELECT patient_id, 0, date, problem FROM visits " +
+                "WHERE TRIM(IFNULL(reason, '')) = '' AND IFNULL(fees, 0) = 0 AND TRIM(IFNULL(problem, '')) <> ''"
+        )
+        db.execSQL(
+            "INSERT INTO appointments (patient_id, day, time, reason, status, created_at) " +
+                "SELECT patient_id, next_visit, '', IFNULL(reason, ''), 0, date FROM visits v " +
+                "WHERE next_visit >= ? AND date = (SELECT MAX(date) FROM visits WHERE patient_id = v.patient_id)",
+            arrayOf<Any>(todayEpochDay() - 1)
+        )
+        val photoRows = mutableListOf<ContentValues>()
+        db.rawQuery(
+            "SELECT v.patient_id, v.photos, v.date, IFNULL(t.id, 0) FROM visits v " +
+                "LEFT JOIN treatments t ON t.legacy_visit = v.id WHERE IFNULL(v.photos, '') <> ''",
+            null
+        ).use { c ->
+            while (c.moveToNext()) {
+                val names = (c.getString(1) ?: "").split("\n").map { File(it).name }.filter { it.isNotBlank() }
+                for (name in names) {
+                    val cv = ContentValues()
+                    cv.put("patient_id", c.getLong(0))
+                    cv.put("treatment_id", c.getLong(3))
+                    cv.put("file", name)
+                    cv.put("kind", "photo")
+                    cv.put("date", c.getLong(2))
+                    photoRows.add(cv)
+                }
+            }
+        }
+        photoRows.forEach { db.insert("case_photos", null, it) }
     }
 
     // ---------- Patients ----------
     private fun queryPatients(where: String, args: Array<String>): List<Patient> {
         val sql = """
             SELECT p.id, p.name, p.phone, p.age, p.gender, p.medical, p.notes, p.created_at,
-                   IFNULL(SUM(v.fees), 0), IFNULL(SUM(v.paid), 0), IFNULL(MAX(v.date), 0), COUNT(v.id),
-                   (SELECT reason FROM visits WHERE patient_id = p.id ORDER BY date DESC LIMIT 1)
-            FROM patients p LEFT JOIN visits v ON v.patient_id = p.id
+                   IFNULL((SELECT SUM(t.fee) FROM treatments t WHERE t.patient_id = p.id AND t.status > 0), 0),
+                   IFNULL((SELECT SUM(y.amount) FROM payments y WHERE y.patient_id = p.id), 0),
+                   MAX(
+                       IFNULL((SELECT MAX(MAX(IFNULL(t.created_at, 0), IFNULL(t.done_at, 0))) FROM treatments t WHERE t.patient_id = p.id), 0),
+                       IFNULL((SELECT MAX(y.date) FROM payments y WHERE y.patient_id = p.id), 0),
+                       IFNULL((SELECT MAX(n.date) FROM case_notes n WHERE n.patient_id = p.id), 0),
+                       IFNULL((SELECT MAX(r.date) FROM prescriptions r WHERE r.patient_id = p.id), 0)
+                   ) AS last_seen,
+                   (SELECT COUNT(*) FROM treatments t WHERE t.patient_id = p.id),
+                   (SELECT t.name FROM treatments t WHERE t.patient_id = p.id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)
+            FROM patients p
             WHERE $where
-            GROUP BY p.id
-            ORDER BY IFNULL(MAX(v.date), p.created_at) DESC
+            ORDER BY CASE WHEN last_seen > 0 THEN last_seen ELSE p.created_at END DESC
         """
         val list = mutableListOf<Patient>()
         readableDatabase.rawQuery(sql, args).use { c ->
@@ -165,7 +217,7 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
         writableDatabase.delete("patients", "id = ?", arrayOf(id.toString()))
     }
 
-    // ---------- Visits ----------
+    // ---------- Old-style visits (kept for older records) ----------
     private fun toVisit(c: Cursor) = Visit(
         id = c.getLong(0), patientId = c.getLong(1), date = c.getLong(2),
         reason = c.getString(3) ?: "", problem = c.getString(4) ?: "",
@@ -218,7 +270,6 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
         writableDatabase.delete("visits", "id = ?", arrayOf(v.id.toString()))
     }
 
-    // ---------- Payments ----------
     private fun logPayment(patientId: Long, visitId: Long, amount: Double, mode: String, date: Long) {
         val cv = ContentValues().apply {
             put("patient_id", patientId); put("visit_id", visitId); put("amount", amount)
@@ -227,7 +278,6 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
         writableDatabase.insert("payments", null, cv)
     }
 
-    /** Adds a payment. If visitId is 0, it is applied to the oldest unpaid visits first. */
     fun recordPayment(patientId: Long, amount: Double, mode: String, visitId: Long = 0L) {
         var left = amount
         val targets = getVisits(patientId)
@@ -255,19 +305,25 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
         return Stats(
             todayCollection = number("SELECT IFNULL(SUM(amount), 0) FROM payments WHERE date >= ?", day),
             monthCollection = number("SELECT IFNULL(SUM(amount), 0) FROM payments WHERE date >= ?", month),
-            todayVisits = number("SELECT COUNT(*) FROM visits WHERE date >= ?", day).toInt(),
+            todayVisits = number(
+                "SELECT COUNT(DISTINCT pid) FROM (" +
+                    "SELECT patient_id AS pid FROM treatments WHERE created_at >= ? OR done_at >= ? " +
+                    "UNION ALL SELECT patient_id FROM payments WHERE date >= ? " +
+                    "UNION ALL SELECT patient_id FROM case_notes WHERE date >= ? " +
+                    "UNION ALL SELECT patient_id FROM prescriptions WHERE date >= ?)",
+                day, day, day, day, day
+            ).toInt(),
             patientCount = patientCount()
         )
     }
 
+    /** Booked appointments from today up to [days] days ahead (one per patient). */
     fun upcoming(days: Int): List<Appointment> {
         val today = todayEpochDay()
         val list = mutableListOf<Appointment>()
         readableDatabase.rawQuery(
-            "SELECT p.id, p.name, v.next_visit, v.reason FROM visits v JOIN patients p ON p.id = v.patient_id " +
-                "WHERE v.next_visit >= ? AND v.next_visit <= ? " +
-                "AND v.date = (SELECT MAX(date) FROM visits WHERE patient_id = v.patient_id) " +
-                "ORDER BY v.next_visit, p.name",
+            "SELECT p.id, p.name, a.day, a.reason FROM appointments a JOIN patients p ON p.id = a.patient_id " +
+                "WHERE a.status = 0 AND a.day >= ? AND a.day <= ? ORDER BY a.day, a.time, p.name",
             arrayOf(today.toString(), (today + days).toString())
         ).use { c ->
             while (c.moveToNext()) {
