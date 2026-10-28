@@ -70,8 +70,12 @@ sealed class Screen {
     data class Patients(val filter: Int = 0, val focusSearch: Boolean = false) : Screen()
     data class PatientForm(val patientId: Long = 0) : Screen()
     data class PatientDetail(val patientId: Long) : Screen()
+
+    /** Opens the patient file with "Add treatment" ready (used by the "Start" button on Today). */
     data class VisitForm(val patientId: Long, val visitId: Long = 0) : Screen()
-    data class RxForm(val patientId: Long, val visitId: Long) : Screen()
+
+    /** A prescription: rxId 0 = new one. */
+    data class RxForm(val patientId: Long, val rxId: Long = 0) : Screen()
 }
 
 data class NavEntry(val depth: Int, val screen: Screen)
@@ -190,15 +194,18 @@ private fun ScreenHost(
         is Screen.Patients -> PatientsScreen(db, screen.filter, screen.focusSearch, go)
         is Screen.BackupPage -> BackupScreen(db, back) { open(null) }
         is Screen.ClinicSettings -> ClinicSettingsScreen(db, back)
-        is Screen.PatientForm -> PatientFormScreen(db, screen.patientId, back) { newId, isNew ->
-            stack.removeAt(stack.lastIndex)
-            if (isNew) {
-                stack.add(Screen.PatientDetail(newId))
-                stack.add(Screen.VisitForm(newId))
+        is Screen.PatientForm -> PatientEditScreen(
+            db, screen.patientId, back,
+            onSaved = { id, isNew ->
+                stack.removeAt(stack.lastIndex)
+                if (isNew) stack.add(Screen.PatientDetail(id))
+            },
+            onDeleted = {
+                repeat(2) { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
             }
-        }
-        is Screen.PatientDetail -> PatientDetailScreen(db, screen.patientId, go, back)
-        is Screen.VisitForm -> VisitFormScreen(db, screen.visitId, screen.patientId, back)
-        is Screen.RxForm -> PrescriptionScreen(db, screen.patientId, screen.visitId, back)
+        )
+        is Screen.PatientDetail -> PatientFileScreen(db, screen.patientId, false, go, back)
+        is Screen.VisitForm -> PatientFileScreen(db, screen.patientId, true, go, back)
+        is Screen.RxForm -> PrescriptionScreen(db, screen.patientId, screen.rxId, back)
     }
 }
