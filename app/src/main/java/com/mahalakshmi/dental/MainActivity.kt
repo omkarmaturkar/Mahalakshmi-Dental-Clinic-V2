@@ -34,19 +34,31 @@ class MainActivity : ComponentActivity() {
     private lateinit var db: ClinicDb
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        CrashGuard.install(this)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         db = ClinicDb(applicationContext)
+        val lastProblem = CrashGuard.read(this)
         setContent {
             ClinicTheme {
-                var showSplash by remember { mutableStateOf(true) }
-                // Short welcome (about 1 second), then straight into the app
-                LaunchedEffect(Unit) {
-                    delay(1100)
-                    showSplash = false
-                }
-                Crossfade(targetState = showSplash, animationSpec = tween(350), label = "splash") { splash ->
-                    if (splash) SplashScreen { showSplash = false } else ClinicApp(db)
+                var problem by remember { mutableStateOf(lastProblem) }
+                val report = problem
+                if (report != null) {
+                    // The app closed because of an error last time: show the report first
+                    CrashReportScreen(report) {
+                        CrashGuard.clear(applicationContext)
+                        problem = null
+                    }
+                } else {
+                    var showSplash by remember { mutableStateOf(true) }
+                    // Short welcome (about 1 second), then straight into the app
+                    LaunchedEffect(Unit) {
+                        delay(1100)
+                        showSplash = false
+                    }
+                    Crossfade(targetState = showSplash, animationSpec = tween(350), label = "splash") { splash ->
+                        if (splash) SplashScreen { showSplash = false } else ClinicApp(db)
+                    }
                 }
             }
         }
@@ -57,8 +69,12 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         val ctx = applicationContext
         Thread {
-            Backup.autoBackup(ctx, db)
-            DriveBackup.autoBackup(ctx, db)
+            try {
+                Backup.autoBackup(ctx, db)
+                DriveBackup.autoBackup(ctx, db)
+            } catch (e: Throwable) {
+                // A failed background backup should never close the app
+            }
         }.start()
     }
 }
