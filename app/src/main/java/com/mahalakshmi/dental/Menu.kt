@@ -9,9 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +48,8 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
     }
     val active = when (section) {
         is Screen.Patients -> if (section.filter == 1) "dues" else "patients"
+        is Screen.Schedule -> "schedule"
+        is Screen.Finance -> "finance"
         is Screen.ClinicSettings -> "clinic"
         is Screen.BackupPage -> "backup"
         else -> "today"
@@ -79,10 +79,10 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
         }
         HorizontalDivider(color = Brand.Line)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp)) {
-            MenuItem("Today", Icons.Filled.Home, active == "today") { onSelect(Screen.Home) }
-            MenuItem("Patients", Icons.Filled.Person, active == "patients", trailing = "${everyone.size}") {
-                onSelect(Screen.Patients())
-            }
+            MenuItem("Home", HomeIcons.Home, active == "today") { onSelect(Screen.Home) }
+            MenuItem("Patients", HomeIcons.People, active == "patients", trailing = "${everyone.size}") { onSelect(Screen.Patients()) }
+            MenuItem("Schedule", HomeIcons.Calendar, active == "schedule") { onSelect(Screen.Schedule) }
+            MenuItem("Finance", HomeIcons.Rupee, active == "finance") { onSelect(Screen.Finance) }
             MenuItem(
                 "Pending dues", Icons.Filled.Warning, active == "dues",
                 trailing = if (dueTotal > 0) rs(dueTotal) else null, trailingColor = Brand.Red
@@ -164,5 +164,40 @@ fun SectionTopBar(title: String, subtitle: String? = null, actions: @Composable 
             }
         }
         actions()
+    }
+}
+
+/** Bottom bar on phones: Home · Patients · Schedule · Finance */
+@Composable
+fun BottomNavBar(current: String, onSelect: (Screen) -> Unit) {
+    Column(Modifier.fillMaxWidth().background(Color.White)) {
+        HorizontalDivider(color = Brand.Line)
+        Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp)) {
+            BottomItem("Home", HomeIcons.Home, current == "home", Modifier.weight(1f)) { onSelect(Screen.Home) }
+            BottomItem("Patients", HomeIcons.People, current == "patients", Modifier.weight(1f)) { onSelect(Screen.Patients()) }
+            BottomItem("Schedule", HomeIcons.Calendar, current == "schedule", Modifier.weight(1f)) { onSelect(Screen.Schedule) }
+            BottomItem("Finance", HomeIcons.Rupee, current == "finance", Modifier.weight(1f)) { onSelect(Screen.Finance) }
+        }
+    }
+}
+
+@Composable
+private fun BottomItem(label: String, icon: ImageVector, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier.width(64.dp).height(34.dp).clip(RoundedCornerShape(50))
+                .background(if (selected) HomeColors.TealSoft else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = if (selected) HomeColors.Teal else Brand.Sub, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            label, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (selected) HomeColors.Teal else Brand.Sub
+        )
     }
 }
