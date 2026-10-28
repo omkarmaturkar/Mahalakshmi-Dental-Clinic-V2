@@ -6,8 +6,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
@@ -20,15 +22,10 @@ import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.text.Layout
-import android.text.SpannableStringBuilder
-import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
-import android.text.style.ForegroundColorSpan
-import android.text.style.RelativeSizeSpan
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -49,7 +45,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -70,6 +65,11 @@ val PdfSub = 0xFF69716D.toInt()
 val PdfLine = 0xFFDCE3D6.toInt()
 val PdfSoft = 0xFFF1F7E4.toInt()
 val PdfRed = 0xFFD93A3F.toInt()
+val PdfGold = 0xFFE09A00.toInt()
+private val PdfDark = 0xFF1B3322.toInt()
+private val PdfWhite = 0xFFFFFFFF.toInt()
+private val PdfStripe = 0xFFF8FAF5.toInt()
+private val PdfRedSoft = 0xFFFDEDED.toInt()
 
 fun docNo(prefix: String, id: Long): String = prefix + id.toString().padStart(4, '0')
 
@@ -83,27 +83,35 @@ class PdfCell(
     val align: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL
 )
 
-/** Draws A4 / A5 pages with the clinic letterhead on top and a footer at the bottom. */
+/**
+ * Draws A4 / A5 pages in the clinic's style: green header with logo, clinic name and doctors,
+ * a big faint logo in the middle of every page, green table headers and a footer band.
+ * A row drawn with fill = PdfSoft becomes a green header row with white text.
+ */
 class PdfBuilder(private val context: Context, private val clinic: ClinicInfo) {
     private val small = clinic.paper == "A5"
     private val pageW = if (small) 420 else 595
     private val pageH = if (small) 595 else 842
-    private val k = if (small) 0.86f else 1f
-    private val margin = if (small) 28f else 40f
+    private val k = if (small) 0.84f else 1f
+    private val margin = if (small) 26f else 38f
     val left = margin
     val right = pageW - margin
     val width = right - left
-    private val bottom = pageH - (if (small) 50f else 62f)
+    private val footerH = if (small) 40f else 48f
+    private val bottom = pageH - footerH - 12f
 
     private val doc = PdfDocument()
     private var page: PdfDocument.Page? = null
     private var pageNo = 0
     private lateinit var canvas: Canvas
     private var y = 0f
+    private var stripe = false
+    private var totalsTop = -1f
 
     private val regular = font(R.font.poppins_regular, Typeface.DEFAULT)
     private val medium = font(R.font.poppins_medium, Typeface.DEFAULT)
     private val semibold = font(R.font.poppins_semibold, Typeface.DEFAULT_BOLD)
+    private val bold = font(R.font.poppins_bold, Typeface.DEFAULT_BOLD)
     private val logo: Bitmap? = loadLogo()
 
     init {
@@ -117,16 +125,18 @@ class PdfBuilder(private val context: Context, private val clinic: ClinicInfo) {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeResource(context.resources, R.drawable.clinic_logo, bounds)
         var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 500) sample *= 2
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 700) sample *= 2
         BitmapFactory.decodeResource(context.resources, R.drawable.clinic_logo, BitmapFactory.Options().apply { inSampleSize = sample })
     } catch (e: Throwable) {
         null
     }
 
+    /** weight: 0 regular, 1 medium, 2 semibold, 3 bold */
     fun paint(size: Float, color: Int = PdfInk, weight: Int = 0) = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = size * k
         this.color = color
         typeface = when (weight) {
+            3 -> bold
             2 -> semibold
             1 -> medium
             else -> regular
@@ -147,7 +157,7 @@ class PdfBuilder(private val context: Context, private val clinic: ClinicInfo) {
         canvas.restore()
     }
 
-    private fun solid(color: Int) = Paint().apply {
+    private fun solid(color: Int) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = color
         style = Paint.Style.FILL
     }
@@ -172,28 +182,46 @@ class PdfBuilder(private val context: Context, private val clinic: ClinicInfo) {
     }
 
     fun row(cells: List<PdfCell>, fill: Int? = null, pad: Float = 6f, after: Float = 0f, line: Boolean = false) {
-        val layouts = cells.map { c -> layout(c.text, paint(c.size, c.color, c.weight), c.width * width - 10f, c.align) }
+        val header = fill == PdfSoft
+        val layouts = cells.map { c ->
+            val color = if (header) PdfWhite else c.color
+            val weight = if (header) 2 else c.weight
+            layout(c.text, paint(c.size, color, weight), c.width * width - 12f, c.align)
+        }
         val h = (layouts.maxOfOrNull { it.height } ?: 0) + pad * 2
         ensure(h)
-        if (fill != null) canvas.drawRect(left, y, right, y + h, solid(fill))
+        when {
+            header -> {
+                canvas.drawRoundRect(RectF(left, y, right, y + h), 8f, 8f, solid(PdfGreen))
+                stripe = false
+            }
+            fill != null -> canvas.drawRect(left, y, right, y + h, solid(fill))
+            line -> {
+                if (stripe) canvas.drawRect(left, y, right, y + h, solid(PdfStripe))
+                stripe = !stripe
+            }
+        }
         var x = left
         cells.forEachIndexed { i, c ->
-            drawLayout(layouts[i], x + 5f, y + pad)
+            drawLayout(layouts[i], x + 6f, y + pad)
             x += c.width * width
         }
         y += h
-        if (line) canvas.drawRect(left, y - 0.7f, right, y, solid(PdfLine))
+        if (line) canvas.drawRect(left, y - 0.6f, right, y, solid(PdfLine))
         y += after
+        totalsTop = -1f
     }
 
     fun title(title: String, info: String) {
-        val t = layout(title, paint(14f, PdfGreen, 2).apply { letterSpacing = 0.08f }, width * 0.55f)
-        val i = layout(info, paint(9.5f, PdfSub), width * 0.45f, Layout.Alignment.ALIGN_OPPOSITE)
-        val h = maxOf(t.height, i.height).toFloat()
-        ensure(h)
-        drawLayout(t, left, y)
-        drawLayout(i, left + width * 0.55f, y)
-        y += h + 12f
+        val tl = layout(title, paint(17f, PdfGreen, 3).apply { letterSpacing = 0.1f }, width * 0.6f)
+        val il = layout(info, paint(9.5f, PdfInk, 1), width * 0.4f, Layout.Alignment.ALIGN_OPPOSITE)
+        val h = maxOf(tl.height + 9f, il.height.toFloat())
+        ensure(h + 14f)
+        drawLayout(tl, left, y)
+        canvas.drawRoundRect(RectF(left, y + tl.height + 3f, left + 44f, y + tl.height + 6.5f), 2f, 2f, solid(PdfGold))
+        drawLayout(il, left + width * 0.6f, y)
+        y += h + 14f
+        totalsTop = -1f
     }
 
     fun patientBox(p: Patient) {
@@ -201,104 +229,217 @@ class PdfBuilder(private val context: Context, private val clinic: ClinicInfo) {
             listOf(p.gender, if (p.age.isNotBlank()) "${p.age} yrs" else "").filter { it.isNotBlank() }.joinToString(" / "),
             p.phone
         ).filter { it.isNotBlank() }.joinToString("   ·   ")
-        val text = SpannableStringBuilder(p.name)
-        if (details.isNotEmpty()) {
-            val start = text.length
-            text.append("\n").append(details)
-            text.setSpan(RelativeSizeSpan(0.78f), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            text.setSpan(ForegroundColorSpan(PdfSub), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        row(
-            listOf(
-                PdfCell(text, 0.66f, 12f, PdfInk, 2),
-                PdfCell("Patient ID\n" + docNo("P-", p.id), 0.34f, 9f, PdfSub, 0, Layout.Alignment.ALIGN_OPPOSITE)
-            ),
-            fill = PdfSoft, pad = 8f, after = 12f
-        )
+        val textW = width * 0.62f
+        val idW = width * 0.3f
+        val cap = paint(7.5f, PdfGreen, 2).apply { letterSpacing = 0.16f }
+        val label = layout("PATIENT", cap, textW)
+        val name = layout(p.name, paint(13.5f, PdfInk, 2), textW)
+        val det = if (details.isNotBlank()) layout(details, paint(9.5f, PdfSub), textW) else null
+        val idLabel = layout("PATIENT ID", cap, idW, Layout.Alignment.ALIGN_OPPOSITE)
+        val id = layout(docNo("P-", p.id), paint(12f, PdfInk, 2), idW, Layout.Alignment.ALIGN_OPPOSITE)
+        val pad = 12f
+        val leftH = label.height + 2 + name.height + (if (det != null) det.height + 2 else 0)
+        val rightH = idLabel.height + 2 + id.height
+        val h = maxOf(leftH, rightH) + pad * 2
+        ensure(h + 14f)
+        canvas.drawRoundRect(RectF(left, y, right, y + h), 12f, 12f, solid(PdfSoft))
+        canvas.drawRoundRect(RectF(left, y, left + 5f, y + h), 3f, 3f, solid(PdfGreen))
+        var ty = y + pad
+        drawLayout(label, left + 18f, ty)
+        ty += label.height + 2
+        drawLayout(name, left + 18f, ty)
+        ty += name.height + 2
+        if (det != null) drawLayout(det, left + 18f, ty)
+        val idX = right - 14f - idW
+        drawLayout(idLabel, idX, y + pad)
+        drawLayout(id, idX, y + pad + idLabel.height + 2)
+        y += h + 14f
     }
 
+    /** A line in the totals block on the right. The strong line (balance) is highlighted. */
     fun total(label: String, value: String, color: Int = PdfInk, strong: Boolean = false) {
-        row(
-            listOf(
-                PdfCell(
-                    label, 0.7f, if (strong) 11.5f else 10.5f, if (strong) PdfInk else PdfSub,
-                    if (strong) 2 else 0, Layout.Alignment.ALIGN_OPPOSITE
-                ),
-                PdfCell(value, 0.3f, if (strong) 12.5f else 10.5f, color, if (strong) 2 else 1, Layout.Alignment.ALIGN_OPPOSITE)
-            ),
-            pad = 3f
+        val boxW = width * 0.5f
+        val x0 = right - boxW
+        val ll = layout(
+            label, paint(if (strong) 11f else 9.5f, if (strong) PdfInk else PdfSub, if (strong) 2 else 0), boxW * 0.55f - 12f
         )
+        val vl = layout(
+            value, paint(if (strong) 14f else 10.5f, color, if (strong) 3 else 1), boxW * 0.45f - 12f,
+            Layout.Alignment.ALIGN_OPPOSITE
+        )
+        val pad = if (strong) 10f else 4f
+        val inner = maxOf(ll.height, vl.height).toFloat()
+        val h = inner + pad * 2
+        ensure(h + 4f)
+        if (totalsTop < 0f) totalsTop = y
+        if (strong) {
+            y += 4f
+            val bg = when (color) {
+                PdfRed -> PdfRedSoft
+                PdfGreen -> PdfSoft
+                else -> PdfStripe
+            }
+            canvas.drawRoundRect(RectF(x0, y, right, y + h), 10f, 10f, solid(bg))
+            canvas.drawRoundRect(RectF(x0, y, x0 + 4f, y + h), 2f, 2f, solid(color))
+        }
+        drawLayout(ll, x0 + 12f, y + pad + (inner - ll.height) / 2f)
+        drawLayout(vl, x0 + boxW * 0.55f, y + pad + (inner - vl.height) / 2f)
+        y += h
     }
 
+    /** A tilted stamp such as "PAID", drawn to the left of the totals. */
+    fun stamp(text: String, color: Int) {
+        val top = if (totalsTop >= 0f) totalsTop else y - 50f
+        val cx = left + width * 0.22f
+        val cy = (top + y) / 2f
+        val p = paint(24f, color, 3).apply {
+            letterSpacing = 0.2f
+            alpha = 215
+        }
+        val tw = p.measureText(text)
+        val bw = tw + 34f
+        val bh = p.textSize + 20f
+        val rect = RectF(cx - bw / 2f, cy - bh / 2f, cx + bw / 2f, cy + bh / 2f)
+        val outer = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2.6f
+            this.color = color
+            alpha = 200
+        }
+        val inner = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 0.9f
+            this.color = color
+            alpha = 170
+        }
+        canvas.save()
+        canvas.rotate(-12f, cx, cy)
+        canvas.drawRoundRect(rect, 9f, 9f, outer)
+        canvas.drawRoundRect(RectF(rect.left + 4f, rect.top + 4f, rect.right - 4f, rect.bottom - 4f), 6f, 6f, inner)
+        val fm = p.fontMetrics
+        canvas.drawText(text, cx - tw / 2f, cy - (fm.ascent + fm.descent) / 2f, p)
+        canvas.restore()
+    }
+
+    /** Signature block of the main doctor (the first doctor shown on bills). */
     fun signature() {
-        val lines = listOf(
-            clinic.doctor, clinic.qualification,
-            if (clinic.regNo.isNotBlank()) "Reg. No. ${clinic.regNo}" else ""
-        ).filter { it.isNotBlank() }
-        val w = width * 0.42f
-        val l = layout(
-            lines.joinToString("\n").ifBlank { "Doctor's signature" },
-            paint(9.5f, PdfInk, 1), w, Layout.Alignment.ALIGN_CENTER
-        )
-        ensure(44f + l.height)
-        y += 36f
-        canvas.drawRect(right - w, y, right, y + 0.8f, solid(PdfSub))
-        y += 6f
-        drawLayout(l, right - w, y)
-        y += l.height + 6f
+        val doctors = clinic.doctor.split("  ·  ").map { it.trim() }.filter { it.isNotBlank() }
+        val first = doctors.firstOrNull().orEmpty()
+        val name = first.substringBefore(",").trim()
+        val reg = when {
+            clinic.regNo.isBlank() -> ""
+            ":" !in clinic.regNo -> if (doctors.size <= 1) clinic.regNo else ""
+            else -> clinic.regNo.split("  ·  ").firstOrNull { it.startsWith("$name:") }?.substringAfter(":")?.trim().orEmpty()
+        }
+        val lines = listOf(first, if (reg.isNotBlank()) "Reg. No. $reg" else "").filter { it.isNotBlank() }
+        val w = width * 0.4f
+        val nameL = layout(lines.joinToString("\n").ifBlank { "Doctor" }, paint(9.5f, PdfInk, 2), w, Layout.Alignment.ALIGN_CENTER)
+        val labelL = layout("Signature", paint(8f, PdfSub), w, Layout.Alignment.ALIGN_CENTER)
+        ensure(52f + nameL.height + labelL.height)
+        y += 40f
+        canvas.drawRect(right - w, y, right, y + 0.9f, solid(PdfSub))
+        y += 4f
+        drawLayout(labelL, right - w, y)
+        y += labelL.height + 2f
+        drawLayout(nameL, right - w, y)
+        y += nameL.height + 6f
+    }
+
+    private fun watermark() {
+        val bmp = logo ?: return
+        val boxW = pageW * 0.6f
+        val boxH = pageH * 0.42f
+        val ratio = bmp.width.toFloat() / bmp.height.coerceAtLeast(1)
+        var w = boxW
+        var h = w / ratio
+        if (h > boxH) {
+            h = boxH
+            w = h * ratio
+        }
+        val cx = pageW / 2f
+        val cy = pageH / 2f + 30f
+        val p = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { alpha = 20 }
+        canvas.drawBitmap(bmp, null, RectF(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f), p)
     }
 
     private fun letterhead() {
-        canvas.drawRect(0f, 0f, pageW.toFloat(), 7f, solid(PdfGreen))
-        val top = if (small) 22f else 30f
-        val logoSize = if (small) 46f else 60f
-        var textX = left
-        var logoH = 0f
-        logo?.let { bmp ->
-            val ratio = bmp.width.toFloat() / bmp.height.coerceAtLeast(1)
-            val w = if (ratio >= 1f) logoSize else logoSize * ratio
-            val h = if (ratio >= 1f) logoSize / ratio else logoSize
-            canvas.drawBitmap(bmp, null, RectF(left, top, left + w, top + h), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
-            textX = left + w + 12f
-            logoH = h
-        }
-        val sideW = width * 0.36f
-        val mainW = right - sideW - 12f - textX
-
-        fun put(text: String, size: Float, color: Int, weight: Int, x: Float, w: Float, at: Float, align: Layout.Alignment): Float {
-            if (text.isBlank()) return 0f
-            val l = layout(text, paint(size, color, weight), w, align)
-            drawLayout(l, x, at)
-            return l.height + 2f
-        }
-
-        val start = Layout.Alignment.ALIGN_NORMAL
-        val end = Layout.Alignment.ALIGN_OPPOSITE
-        var leftY = top
-        leftY += put(clinic.name, 17f, PdfInk, 2, textX, mainW, leftY, start)
-        leftY += put(
-            listOf(clinic.doctor, clinic.qualification).filter { it.isNotBlank() }.joinToString(", "),
-            10.5f, PdfGreen, 1, textX, mainW, leftY, start
-        )
-        if (clinic.regNo.isNotBlank()) leftY += put("Reg. No. ${clinic.regNo}", 9f, PdfSub, 0, textX, mainW, leftY, start)
-
-        var sideY = top + 2f
-        listOf(
+        val pad = if (small) 16f else 22f
+        val logoSize = if (small) 50f else 62f
+        val hasLogo = logo != null
+        val textX = if (hasLogo) margin + logoSize + 14f else margin
+        val sideW = width * 0.33f
+        val mainW = right - sideW - 14f - textX
+        val nameL = layout(clinic.name.uppercase(), paint(17f, PdfWhite, 3).apply { letterSpacing = 0.04f }, mainW)
+        val doctorL = if (clinic.doctor.isNotBlank()) layout(clinic.doctor, paint(9.5f, 0xFFE3F1CC.toInt(), 1), mainW) else null
+        val regL = if (clinic.regNo.isNotBlank()) layout("Reg. No. ${clinic.regNo}", paint(8f, 0xCCFFFFFF.toInt()), mainW) else null
+        val contacts = listOf(
             if (clinic.phone.isNotBlank()) "Ph: ${clinic.phone}" else "",
             clinic.email, clinic.address, clinic.timings
-        ).forEach { sideY += put(it, 8.8f, PdfSub, 0, right - sideW, sideW, sideY, end) }
+        ).filter { it.isNotBlank() }
+        val contactL = if (contacts.isNotEmpty()) {
+            layout(contacts.joinToString("\n"), paint(8.3f, 0xEEFFFFFF.toInt()), sideW, Layout.Alignment.ALIGN_OPPOSITE)
+        } else null
+        val mainH = nameL.height + (if (doctorL != null) doctorL.height + 4 else 0) + (if (regL != null) regL.height + 2 else 0)
+        val bandH = maxOf(if (hasLogo) logoSize else 0f, mainH.toFloat(), (contactL?.height ?: 0).toFloat()) + pad * 2
 
-        y = maxOf(top + logoH, leftY, sideY) + 8f
-        canvas.drawRect(left, y, right, y + 1.6f, solid(PdfGreen))
-        y += 16f
+        val band = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, pageW.toFloat(), bandH, PdfDark, PdfGreen, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, 0f, pageW.toFloat(), bandH, band)
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.2f
+            color = 0x26FFFFFF
+        }
+        canvas.drawCircle(pageW - 40f, 0f, bandH * 0.85f, ring)
+        canvas.drawCircle(pageW - 40f, 0f, bandH * 1.3f, ring)
+        canvas.drawRect(0f, bandH, pageW.toFloat(), bandH + 3f, solid(PdfGold))
+
+        if (hasLogo) {
+            val tileTop = (bandH - logoSize) / 2f
+            canvas.drawRoundRect(RectF(margin, tileTop, margin + logoSize, tileTop + logoSize), 14f, 14f, solid(PdfWhite))
+            logo?.let { bmp ->
+                val inset = 5f
+                val box = logoSize - inset * 2
+                val ratio = bmp.width.toFloat() / bmp.height.coerceAtLeast(1)
+                val w = if (ratio >= 1f) box else box * ratio
+                val h = if (ratio >= 1f) box / ratio else box
+                val lx = margin + inset + (box - w) / 2f
+                val ly = tileTop + inset + (box - h) / 2f
+                canvas.drawBitmap(bmp, null, RectF(lx, ly, lx + w, ly + h), Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+            }
+        }
+        var ty = (bandH - mainH) / 2f
+        drawLayout(nameL, textX, ty)
+        ty += nameL.height
+        if (doctorL != null) {
+            ty += 4f
+            drawLayout(doctorL, textX, ty)
+            ty += doctorL.height
+        }
+        if (regL != null) {
+            ty += 2f
+            drawLayout(regL, textX, ty)
+        }
+        if (contactL != null) drawLayout(contactL, right - sideW, (bandH - contactL.height) / 2f)
+        y = bandH + 3f + (if (small) 16f else 22f)
     }
 
     private fun footer() {
-        val fy = pageH - (if (small) 36f else 44f)
-        canvas.drawRect(left, fy - 6f, right, fy - 5.4f, solid(PdfLine))
-        val pnW = 50f
-        if (clinic.footer.isNotBlank()) drawLayout(layout(clinic.footer, paint(8.5f, PdfSub), width - pnW - 10f), left, fy)
-        drawLayout(layout("Page $pageNo", paint(8.5f, PdfSub), pnW, Layout.Alignment.ALIGN_OPPOSITE), right - pnW, fy)
+        val top = pageH - footerH
+        canvas.drawRect(0f, top, pageW.toFloat(), pageH.toFloat(), solid(PdfSoft))
+        val strip = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, pageW.toFloat(), 0f, PdfDark, PdfGreen, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, pageH - 6f, pageW.toFloat(), pageH.toFloat(), strip)
+        val area = footerH - 6f
+        val pnW = 60f
+        if (clinic.footer.isNotBlank()) {
+            val l = layout(clinic.footer, paint(8.5f, PdfGreen, 1), width - pnW - 10f)
+            drawLayout(l, left, top + (area - l.height) / 2f)
+        }
+        val pn = layout("Page $pageNo", paint(8.5f, PdfSub), pnW, Layout.Alignment.ALIGN_OPPOSITE)
+        drawLayout(pn, right - pnW, top + (area - pn.height) / 2f)
     }
 
     private fun newPage() {
@@ -310,6 +451,9 @@ class PdfBuilder(private val context: Context, private val clinic: ClinicInfo) {
         val p = doc.startPage(PdfDocument.PageInfo.Builder(pageW, pageH, pageNo).create())
         page = p
         canvas = p.canvas
+        stripe = false
+        totalsTop = -1f
+        watermark()
         letterhead()
     }
 
@@ -339,114 +483,44 @@ fun pdfFile(context: Context, kind: String, who: String): File {
     return File(dir, "${kind}_${safe}_$stamp.pdf")
 }
 
-// ───────────── Receipt & statement ─────────────
-data class PaymentEntry(val amount: Double, val date: Long, val mode: String)
-
-fun ClinicDb.visitPayments(visitId: Long): List<PaymentEntry> {
-    val list = mutableListOf<PaymentEntry>()
-    readableDatabase.rawQuery(
-        "SELECT amount, date, mode FROM payments WHERE visit_id = ? ORDER BY date", arrayOf(visitId.toString())
-    ).use { c -> while (c.moveToNext()) list.add(PaymentEntry(c.getDouble(0), c.getLong(1), c.getString(2) ?: "")) }
-    return list
-}
-
-fun receiptPdf(context: Context, db: ClinicDb, visitId: Long): File {
-    val visit = db.getVisit(visitId) ?: error("Visit not found")
-    val patient = db.getPatient(visit.patientId) ?: error("Patient not found")
-    val pdf = PdfBuilder(context, db.clinicInfo())
+/** Sample page for "Preview letterhead" in Clinic & doctors. */
+fun letterheadSamplePdf(context: Context, clinic: ClinicInfo): File {
+    val pdf = PdfBuilder(context, clinic)
     val end = Layout.Alignment.ALIGN_OPPOSITE
-    pdf.title("PAYMENT RECEIPT", "Receipt No. ${docNo("R-", visit.id)}\nDate: ${fmtDate(visit.date)}")
-    pdf.patientBox(patient)
+    pdf.title("SAMPLE INVOICE", "Invoice No. INV-0001\nDate: ${fmtDate(System.currentTimeMillis())}")
+    pdf.patientBox(Patient(id = 1, name = "Sample Patient", phone = "9876543210", age = "35", gender = "Female"))
     pdf.row(
         listOf(
-            PdfCell("Treatment", 0.55f, 9.5f, PdfSub, 1),
-            PdfCell("Teeth", 0.2f, 9.5f, PdfSub, 1),
+            PdfCell("#", 0.08f, 9.5f, PdfSub, 1),
+            PdfCell("Treatment", 0.5f, 9.5f, PdfSub, 1),
+            PdfCell("Tooth", 0.17f, 9.5f, PdfSub, 1),
             PdfCell("Amount", 0.25f, 9.5f, PdfSub, 1, end)
         ),
         fill = PdfSoft
     )
     pdf.row(
         listOf(
-            PdfCell(visit.treatments.joinToString(", ").ifBlank { "Dental treatment" }, 0.55f),
-            PdfCell(visit.teethList.joinToString(", ").ifBlank { "–" }, 0.2f),
-            PdfCell(rs(visit.fees), 0.25f, align = end)
+            PdfCell("1", 0.08f, 10f, PdfSub),
+            PdfCell("Root Canal", 0.5f, 10f, PdfInk, 1),
+            PdfCell("36", 0.17f, 10f),
+            PdfCell(rs(6000.0), 0.25f, 10f, align = end)
         ),
-        pad = 8f, line = true
+        pad = 7f, line = true
     )
-    pdf.space(8f)
-    pdf.total("Total fees", rs(visit.fees))
-    pdf.total("Paid", rs(visit.paid), PdfGreen)
-    pdf.total(
-        "Balance due", rs(visit.remaining.coerceAtLeast(0.0)),
-        if (visit.remaining > 0) PdfRed else PdfGreen, strong = true
-    )
-    val payments = db.visitPayments(visitId).filter { it.amount != 0.0 }
-    if (payments.isNotEmpty()) {
-        pdf.space(14f)
-        pdf.text("Payments received", 11f, PdfGreen, 2)
-        payments.forEach { p ->
-            pdf.row(
-                listOf(
-                    PdfCell(fmtDate(p.date), 0.45f, 10f),
-                    PdfCell(p.mode.ifBlank { "–" }, 0.3f, 10f, PdfSub),
-                    PdfCell(if (p.amount < 0) "– " + rs(-p.amount) else rs(p.amount), 0.25f, 10f, align = end)
-                ),
-                pad = 5f, line = true
-            )
-        }
-    }
-    pdf.signature()
-    return pdf.save(pdfFile(context, "Receipt", patient.name))
-}
-
-fun statementPdf(context: Context, db: ClinicDb, patientId: Long): File {
-    val patient = db.getPatient(patientId) ?: error("Patient not found")
-    val visits = db.getVisits(patientId).sortedBy { it.date }
-    val pdf = PdfBuilder(context, db.clinicInfo())
-    val end = Layout.Alignment.ALIGN_OPPOSITE
-    pdf.title("ACCOUNT STATEMENT", "Date: ${fmtDate(System.currentTimeMillis())}")
-    pdf.patientBox(patient)
     pdf.row(
         listOf(
-            PdfCell("Date", 0.19f, 9.5f, PdfSub, 1),
-            PdfCell("Treatment", 0.36f, 9.5f, PdfSub, 1),
-            PdfCell("Fees", 0.15f, 9.5f, PdfSub, 1, end),
-            PdfCell("Paid", 0.15f, 9.5f, PdfSub, 1, end),
-            PdfCell("Due", 0.15f, 9.5f, PdfSub, 1, end)
+            PdfCell("2", 0.08f, 10f, PdfSub),
+            PdfCell("Cleaning", 0.5f, 10f, PdfInk, 1),
+            PdfCell("–", 0.17f, 10f),
+            PdfCell(rs(1200.0), 0.25f, 10f, align = end)
         ),
-        fill = PdfSoft
+        pad = 7f, line = true
     )
-    if (visits.isEmpty()) pdf.text("No visits yet.", 10f, PdfSub)
-    visits.forEach { v ->
-        val treatment = v.treatments.joinToString(", ").ifBlank { "Visit" } +
-            if (v.teethList.isNotEmpty()) " (${v.teethList.joinToString(", ")})" else ""
-        pdf.row(
-            listOf(
-                PdfCell(fmtDate(v.date), 0.19f, 9.5f),
-                PdfCell(treatment, 0.36f, 9.5f),
-                PdfCell(rs(v.fees), 0.15f, 9.5f, align = end),
-                PdfCell(rs(v.paid), 0.15f, 9.5f, PdfGreen, align = end),
-                PdfCell(rs(v.remaining.coerceAtLeast(0.0)), 0.15f, 9.5f, if (v.remaining > 0) PdfRed else PdfSub, align = end)
-            ),
-            pad = 6f, line = true
-        )
-    }
     pdf.space(8f)
-    pdf.total("Total fees", rs(patient.totalFees))
-    pdf.total("Total paid", rs(patient.totalPaid), PdfGreen)
-    pdf.total(
-        "Balance due", rs(patient.remaining.coerceAtLeast(0.0)),
-        if (patient.remaining > 0) PdfRed else PdfGreen, strong = true
-    )
-    pdf.signature()
-    return pdf.save(pdfFile(context, "Statement", patient.name))
-}
-
-fun letterheadSamplePdf(context: Context, clinic: ClinicInfo): File {
-    val pdf = PdfBuilder(context, clinic)
-    pdf.title("SAMPLE PAGE", "Date: ${fmtDate(System.currentTimeMillis())}")
-    pdf.patientBox(Patient(id = 1, name = "Sample Patient", phone = "9876543210", age = "35", gender = "Female"))
-    pdf.text("This is how the top and bottom of your prescriptions, receipts and statements will look.", 10.5f, PdfSub)
+    pdf.total("Total", rs(7200.0))
+    pdf.total("Paid", rs(7200.0), PdfGreen)
+    pdf.total("Balance due", rs(0.0), PdfGreen, strong = true)
+    pdf.stamp("PAID", PdfGreen)
     pdf.signature()
     return pdf.save(pdfFile(context, "Letterhead", "Sample"))
 }
@@ -523,6 +597,7 @@ fun openPdf(context: Context, file: File) {
         toast(context, "Could not open the PDF")
     }
 }
+
 fun printPdf(context: Context, file: File) {
     try {
         val manager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
@@ -567,7 +642,7 @@ private class PdfPrintAdapter(private val file: File) : PrintDocumentAdapter() {
     }
 }
 
-// ───────────── "PDF ready" dialog ─────────────
+// ───────────── "PDF ready" window ─────────────
 @Composable
 fun PdfActionsDialog(
     title: String,
@@ -622,81 +697,6 @@ fun PdfActionsDialog(
             Spacer(Modifier.height(16.dp))
             SoftButton("Close", null, Modifier.fillMaxWidth(), bg = Brand.Soft, fg = Brand.Sub, onClick = onDismiss)
         }
-    }
-}
-
-// ───────────── "Prescriptions & bills" card on the patient profile ─────────────
-@Composable
-fun PatientDocumentsCard(db: ClinicDb, patient: Patient, visits: List<Visit>, go: (Screen) -> Unit) {
-    val version = DataBus.version
-    val rxVisits = remember(version, patient.id) { db.prescribedVisitIds(patient.id) }
-    val clinicName = remember(version) { db.clinicInfo().name }
-    var showAll by remember { mutableStateOf(false) }
-    var receiptFor by remember { mutableStateOf<Visit?>(null) }
-    var statement by remember { mutableStateOf(false) }
-    val first = patient.name.trim().substringBefore(" ")
-
-    AppCard(Modifier.fillMaxWidth(), padding = 20.dp) {
-        Text("Prescriptions & bills", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText)
-        Text("Make a PDF, print it or send it on WhatsApp", fontSize = 12.sp, color = Brand.Sub)
-        Spacer(Modifier.height(10.dp))
-        if (visits.isEmpty()) {
-            Text("Add a visit first.", fontSize = 13.sp, color = Brand.Sub)
-        } else {
-            (if (showAll) visits else visits.take(3)).forEachIndexed { i, v ->
-                if (i > 0) HorizontalDivider(color = Brand.Line)
-                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(fmtDate(v.date), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Brand.Ink)
-                        Text(
-                            v.treatments.joinToString(", ").ifBlank { "Visit" }, fontSize = 12.sp, color = Brand.Sub,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    val hasRx = v.id in rxVisits
-                    SoftButton(
-                        if (hasRx) "Rx ✓" else "Rx", DocIcons.Pill, height = 40.dp,
-                        bg = if (hasRx) Brand.GreenDeep else Brand.GreenSoft,
-                        fg = if (hasRx) Color.White else Brand.GreenText
-                    ) { go(Screen.RxForm(patient.id, v.id)) }
-                    Spacer(Modifier.width(8.dp))
-                    SoftButton("Bill", DocIcons.Receipt, height = 40.dp, bg = Brand.Soft, fg = Brand.Ink) { receiptFor = v }
-                }
-            }
-            if (visits.size > 3) {
-                Text(
-                    if (showAll) "Show less" else "Show all ${visits.size} visits",
-                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GreenDeep,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { showAll = !showAll }
-                        .padding(vertical = 6.dp, horizontal = 4.dp)
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            SoftButton("Account statement (PDF)", DocIcons.Pdf, Modifier.fillMaxWidth(), bg = Brand.Soft, fg = Brand.Ink) {
-                statement = true
-            }
-        }
-    }
-
-    receiptFor?.let { v ->
-        PdfActionsDialog(
-            title = "Payment receipt",
-            subtitle = "Visit on ${fmtDate(v.date)}",
-            phone = patient.phone,
-            message = "Hello $first, here is your payment receipt from $clinicName. Thank you!",
-            build = { ctx -> receiptPdf(ctx, db, v.id) },
-            onDismiss = { receiptFor = null }
-        )
-    }
-    if (statement) {
-        PdfActionsDialog(
-            title = "Account statement",
-            subtitle = "All visits and payments of ${patient.name}",
-            phone = patient.phone,
-            message = "Hello $first, here is your account statement from $clinicName.",
-            build = { ctx -> statementPdf(ctx, db, patient.id) },
-            onDismiss = { statement = false }
-        )
     }
 }
 
