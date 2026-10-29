@@ -1,5 +1,7 @@
 package com.mahalakshmi.dental
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -167,37 +170,42 @@ fun SectionTopBar(title: String, subtitle: String? = null, actions: @Composable 
     }
 }
 
-/** Bottom bar on phones: Home · Patients · Schedule · Finance */
+/** Bottom bar on phones: a floating dark bar with Home · Patients · Schedule · Finance */
 @Composable
 fun BottomNavBar(current: String, onSelect: (Screen) -> Unit) {
-    Column(Modifier.fillMaxWidth().background(Color.White)) {
-        HorizontalDivider(color = Brand.Line)
-        Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 8.dp)) {
-            BottomItem("Home", HomeIcons.Home, current == "home", Modifier.weight(1f)) { onSelect(Screen.Home) }
-            BottomItem("Patients", HomeIcons.People, current == "patients", Modifier.weight(1f)) { onSelect(Screen.Patients()) }
-            BottomItem("Schedule", HomeIcons.Calendar, current == "schedule", Modifier.weight(1f)) { onSelect(Screen.Schedule) }
-            BottomItem("Finance", HomeIcons.Rupee, current == "finance", Modifier.weight(1f)) { onSelect(Screen.Finance) }
+    val shape = RoundedCornerShape(30.dp)
+    Box(
+        Modifier.fillMaxWidth().background(Brand.Bg).navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp)
+    ) {
+        Row(
+            Modifier.fillMaxWidth()
+                .shadow(16.dp, shape, ambientColor = Color(0x26000000), spotColor = Color(0x40000000))
+                .clip(shape).background(Brand.Charcoal).padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            NavPill("Home", HomeIcons.Home, current == "home") { onSelect(Screen.Home) }
+            NavPill("Patients", HomeIcons.People, current == "patients") { onSelect(Screen.Patients()) }
+            NavPill("Schedule", HomeIcons.Calendar, current == "schedule") { onSelect(Screen.Schedule) }
+            NavPill("Finance", HomeIcons.Rupee, current == "finance") { onSelect(Screen.Finance) }
         }
     }
 }
 
 @Composable
-private fun BottomItem(label: String, icon: ImageVector, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun RowScope.NavPill(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+    val weight by animateFloatAsState(if (selected) 1.9f else 1f, label = "navWeight")
+    val bg by animateColorAsState(if (selected) Brand.GreenDeep else Color.Transparent, label = "navBg")
+    Row(
+        Modifier.weight(weight).height(50.dp).clip(RoundedCornerShape(25.dp)).background(bg)
+            .clickable(onClick = onClick).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
-        Box(
-            Modifier.width(64.dp).height(34.dp).clip(RoundedCornerShape(50))
-                .background(if (selected) HomeColors.TealSoft else Color.Transparent),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(icon, null, tint = if (selected) HomeColors.Teal else Brand.Sub, modifier = Modifier.size(24.dp))
+        Icon(icon, label, tint = if (selected) Color.White else Color(0xFFB4BDB8), modifier = Modifier.size(23.dp))
+        if (selected) {
+            Spacer(Modifier.width(8.dp))
+            Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Clip)
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            label, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) HomeColors.Teal else Brand.Sub
-        )
     }
 }
