@@ -1,6 +1,7 @@
 package com.mahalakshmi.dental
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -25,7 +26,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -57,11 +58,18 @@ class MainActivity : ComponentActivity() {
                         showSplash = false
                     }
                     Crossfade(targetState = showSplash, animationSpec = tween(350), label = "splash") { splash ->
-                        if (splash) SplashScreen { showSplash = false } else ClinicApp(db)
+                        if (splash) SplashScreen { showSplash = false } else TrialGate(db)
                     }
                 }
             }
         }
+    }
+
+    // Each time the app comes to the front, a trial version checks the date again
+    override fun onResume() {
+        super.onResume()
+        Trial.recheck()
+        Trial.checkInternetTime(applicationContext)
     }
 
     // When the app goes to the background: backup to the tablet folder + daily Google Drive backup
@@ -76,6 +84,28 @@ class MainActivity : ComponentActivity() {
                 // A failed background backup should never close the app
             }
         }.start()
+    }
+}
+
+/** A trial that has ended shows the "Trial period ended" screen. The data can still be backed up. */
+@Composable
+private fun TrialGate(db: ClinicDb) {
+    val context = LocalContext.current
+    val expired = remember(Trial.checks) { Trial.expired(context) }
+    var backup by remember { mutableStateOf(false) }
+    when {
+        !expired -> ClinicApp(db)
+        backup -> {
+            BackHandler { backup = false }
+            StatusBarIcons(dark = !AppTheme.dark)
+            CompositionLocalProvider(LocalNotify provides { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }) {
+                BackupScreen(db, onBack = { backup = false }) { backup = false }
+            }
+        }
+        else -> {
+            StatusBarIcons(dark = !AppTheme.dark)
+            TrialEndedScreen { backup = true }
+        }
     }
 }
 
@@ -100,6 +130,7 @@ data class NavEntry(val depth: Int, val screen: Screen)
 
 @Composable
 fun ClinicApp(db: ClinicDb) {
+    val context = LocalContext.current
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
     val go: (Screen) -> Unit = { stack.add(it) }
     val back: () -> Unit = { if (stack.size > 1) stack.removeAt(stack.lastIndex) }
@@ -110,6 +141,9 @@ fun ClinicApp(db: ClinicDb) {
     }
     BackHandler(enabled = stack.size > 1) { back() }
     StatusBarIcons(dark = !AppTheme.dark)
+
+    val daysLeft = remember(Trial.checks, DataBus.version) { Trial.daysLeft(context) }
+    val trialNote = Trial.isTrial && daysLeft <= 5
 
     var message by remember { mutableStateOf<String?>(null) }
     var shownText by remember { mutableStateOf("") }
@@ -154,10 +188,13 @@ fun ClinicApp(db: ClinicDb) {
                 Row(Modifier.fillMaxSize()) {
                     Box(Modifier.width(menuWidth).fillMaxHeight()) { menu() }
                     Box(Modifier.width(1.dp).fillMaxHeight().background(Brand.Line))
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        CompositionLocalProvider(LocalMenu provides null) {
-                            NavArea(entry) { screen -> ScreenHost(screen, db, stack, go, back, open) }
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            CompositionLocalProvider(LocalMenu provides null) {
+                                NavArea(entry) { screen -> ScreenHost(screen, db, stack, go, back, open) }
+                            }
                         }
+                        if (trialNote) TrialStrip(daysLeft, padNav = true)
                     }
                 }
             } else {
@@ -175,6 +212,7 @@ fun ClinicApp(db: ClinicDb) {
                             Box(Modifier.weight(1f).fillMaxWidth()) {
                                 NavArea(entry) { screen -> ScreenHost(screen, db, stack, go, back, open) }
                             }
+                            if (trialNote) TrialStrip(daysLeft, padNav = tab == null)
                             if (tab != null) BottomNavBar(tab) { target -> open(target) }
                         }
                     }
