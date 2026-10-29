@@ -2,7 +2,6 @@ package com.mahalakshmi.dental
 
 import android.os.Bundle
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,10 +27,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private lateinit var db: ClinicDb
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         db = ClinicDb(applicationContext)
         AppTheme.load(applicationContext)
+        AppLock.start(applicationContext)
         val lastProblem = CrashGuard.read(this)
         setContent {
             ClinicTheme {
@@ -58,11 +59,17 @@ class MainActivity : ComponentActivity() {
                         showSplash = false
                     }
                     Crossfade(targetState = showSplash, animationSpec = tween(350), label = "splash") { splash ->
-                        if (splash) SplashScreen { showSplash = false } else TrialGate(db)
+                        if (splash) SplashScreen { showSplash = false } else LockGate { TrialGate(db) }
                     }
                 }
             }
         }
+    }
+
+    // Coming back to the app: lock it again if app lock is on and enough time has passed
+    override fun onStart() {
+        super.onStart()
+        AppLock.cameBack(applicationContext)
     }
 
     // Each time the app comes to the front, a trial version checks the date again
@@ -72,18 +79,11 @@ class MainActivity : ComponentActivity() {
         Trial.checkInternetTime(applicationContext)
     }
 
-    // When the app goes to the background: backup to the tablet folder + daily Google Drive backup
+    // Leaving the app: remember the time for app lock, and back up anything new straight away
     override fun onStop() {
         super.onStop()
-        val ctx = applicationContext
-        Thread {
-            try {
-                Backup.autoBackup(ctx, db)
-                DriveBackup.autoBackup(ctx, db)
-            } catch (e: Throwable) {
-                // A failed background backup should never close the app
-            }
-        }.start()
+        AppLock.leftApp()
+        AutoBackup.onAppClosed(applicationContext, db)
     }
 }
 
