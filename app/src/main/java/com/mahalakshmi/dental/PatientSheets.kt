@@ -59,7 +59,7 @@ private val lowerRow = listOf(48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35
 
 /** Teeth coloured by their treatment status. Tap a tooth to work on it. */
 @Composable
-fun StatusChart(statusByTooth: Map<String, Int>, onTooth: (String) -> Unit) {
+fun OldStatusChart(statusByTooth: Map<String, Int>, onTooth: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val width = minOf(maxWidth, 460.dp)
         val tooth = if (width < 320.dp) 24.dp else 28.dp

@@ -451,7 +451,7 @@ private val upperTeeth = listOf(18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 
 private val lowerTeeth = listOf(48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38)
 
 @Composable
-fun ToothChart(selected: List<String>, onToggle: (String) -> Unit) {
+fun OldToothChart(selected: List<String>, onToggle: (String) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp)) {
         val width = maxWidth
         val tooth = if (width < 320.dp) 24.dp else 28.dp
