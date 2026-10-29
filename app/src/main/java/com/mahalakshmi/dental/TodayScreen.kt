@@ -52,9 +52,9 @@ import java.time.ZoneId
 
 // ───────────── Colours & icons of the home page ─────────────
 object HomeColors {
-    val Teal = Color(0xFF135B56)
-    val TealText = Color(0xFF14615B)
-    val TealSoft = Color(0xFFE3F1EE)
+    val Teal = Color(0xFF588913)
+    val TealText = Color(0xFF5B8D14)
+    val TealSoft = Color(0xFFECF4E0)
     val Amber = Color(0xFFB26A00)
     val AmberSoft = Color(0xFFFDF0D9)
     val Dot = Color(0xFFF5A524)
