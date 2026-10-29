@@ -3,6 +3,8 @@
 package com.mahalakshmi.dental
 
 import android.app.Activity
+import android.content.Context
+import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -68,27 +71,58 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToLong
 
+// ───────────── Light / dark mode ─────────────
+/** Light, dark or the same as the phone. Saved on this device; every screen changes at once. */
+object AppTheme {
+    const val LIGHT = "light"
+    const val DARK = "dark"
+    const val AUTO = "auto"
+
+    var mode by mutableStateOf(LIGHT)
+        private set
+    var systemDark by mutableStateOf(false)
+
+    val dark: Boolean get() = mode == DARK || (mode == AUTO && systemDark)
+
+    private fun prefs(c: Context) = c.getSharedPreferences("appearance", Context.MODE_PRIVATE)
+
+    fun load(c: Context) {
+        mode = prefs(c).getString("mode", LIGHT) ?: LIGHT
+        systemDark = (c.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    }
+
+    fun set(c: Context, newMode: String) {
+        mode = newMode
+        prefs(c).edit().putString("mode", newMode).apply()
+    }
+}
+
 // ───────────── Brand colours (taken from your logo) ─────────────
 object Brand {
+    private val d: Boolean get() = AppTheme.dark
     val Green = Color(0xFF7CB518)
     val GreenDeep = Color(0xFF5A8F12)
-    val GreenText = Color(0xFF4A780E)
-    val GreenSoft = Color(0xFFF1F7E4)
-    val GreenLine = Color(0xFFDCEBC3)
-    val Charcoal = Color(0xFF2A302E)
-    val Slate = Color(0xFF555B59)
+    val GreenText: Color get() = if (d) Color(0xFF9CCB5A) else Color(0xFF4A780E)
+    val GreenSoft: Color get() = if (d) Color(0xFF223019) else Color(0xFFF1F7E4)
+    val GreenLine: Color get() = if (d) Color(0xFF34452A) else Color(0xFFDCEBC3)
+    val Charcoal: Color get() = if (d) Color(0xFFE6EBE8) else Color(0xFF2A302E)
+    val Slate: Color get() = if (d) Color(0xFFB7BEBB) else Color(0xFF555B59)
     val Gold = Color(0xFFF5A800)
-    val GoldDeep = Color(0xFF9A6A00)
-    val GoldSoft = Color(0xFFFFF5DA)
-    val Bg = Color(0xFFF6F7F3)
-    val Ink = Color(0xFF1D2321)
-    val Sub = Color(0xFF69716D)
-    val Faint = Color(0xFFA3AAA6)
-    val Line = Color(0xFFE9ECE6)
-    val Soft = Color(0xFFF1F3EE)
+    val GoldDeep: Color get() = if (d) Color(0xFFF0B640) else Color(0xFF9A6A00)
+    val GoldSoft: Color get() = if (d) Color(0xFF332914) else Color(0xFFFFF5DA)
+    val Bg: Color get() = if (d) Color(0xFF0F1412) else Color(0xFFF6F7F3)
+    val Surface: Color get() = if (d) Color(0xFF1A211E) else Color.White
+    val Ink: Color get() = if (d) Color(0xFFECF0EE) else Color(0xFF1D2321)
+    val Sub: Color get() = if (d) Color(0xFFA6AFAA) else Color(0xFF69716D)
+    val Faint: Color get() = if (d) Color(0xFF6E7873) else Color(0xFFA3AAA6)
+    val Line: Color get() = if (d) Color(0xFF29312E) else Color(0xFFE9ECE6)
+    val Soft: Color get() = if (d) Color(0xFF222A27) else Color(0xFFF1F3EE)
     val Red = Color(0xFFE5484D)
-    val RedSoft = Color(0xFFFDEDED)
+    val RedSoft: Color get() = if (d) Color(0xFF3A1E21) else Color(0xFFFDEDED)
     val Glass = Color(0x29FFFFFF)
+
+    /** Dark bars (bottom bar, messages): dark in both modes. */
+    val Night: Color get() = if (d) Color(0xFF242C28) else Color(0xFF2A302E)
 }
 
 val BrandGradient: Brush = Brush.linearGradient(listOf(Color(0xFF8DC63F), Color(0xFF5A8F12)))
@@ -138,8 +172,23 @@ val AppTypography = Typography(
 
 @Composable
 fun ClinicTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(
+    val scheme = if (AppTheme.dark) {
+        darkColorScheme(
+            primary = Brand.GreenDeep, onPrimary = Color.White,
+            primaryContainer = Brand.GreenSoft, onPrimaryContainer = Brand.GreenText,
+            secondary = Brand.GreenText, onSecondary = Color.Black,
+            secondaryContainer = Brand.GreenSoft, onSecondaryContainer = Brand.GreenText,
+            tertiary = Brand.Gold,
+            background = Brand.Bg, onBackground = Brand.Ink,
+            surface = Brand.Surface, onSurface = Brand.Ink,
+            surfaceVariant = Brand.Soft, onSurfaceVariant = Brand.Sub,
+            surfaceContainerLowest = Brand.Surface, surfaceContainerLow = Brand.Surface,
+            surfaceContainer = Brand.Surface, surfaceContainerHigh = Brand.Surface,
+            surfaceContainerHighest = Brand.Soft,
+            outline = Color(0xFF3A4541), outlineVariant = Brand.Line, error = Brand.Red
+        )
+    } else {
+        lightColorScheme(
             primary = Brand.GreenDeep, onPrimary = Color.White,
             primaryContainer = Brand.GreenSoft, onPrimaryContainer = Brand.GreenText,
             secondary = Brand.Charcoal, onSecondary = Color.White,
@@ -152,18 +201,20 @@ fun ClinicTheme(content: @Composable () -> Unit) {
             surfaceContainer = Color.White, surfaceContainerHigh = Color.White,
             surfaceContainerHighest = Brand.Soft,
             outline = Color(0xFFD8DDD5), outlineVariant = Brand.Line, error = Brand.Red
-        ),
-        typography = AppTypography,
-        content = content
-    )
+        )
+    }
+    MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
 }
 
+/** dark = true gives dark icons (for light pages); false gives light icons (for dark pages). */
 @Composable
 fun StatusBarIcons(dark: Boolean) {
     val view = LocalView.current
     SideEffect {
         val activity = view.context as? Activity ?: return@SideEffect
-        WindowCompat.getInsetsController(activity.window, view).isAppearanceLightStatusBars = dark
+        val controller = WindowCompat.getInsetsController(activity.window, view)
+        controller.isAppearanceLightStatusBars = dark
+        controller.isAppearanceLightNavigationBars = dark
     }
 }
 
@@ -208,6 +259,21 @@ object AppIcons {
     }
     val Sparkle: ImageVector by lazy {
         vectorIcon("sparkle", 24f, "M12,0C12.6,6.6 17.4,11.4 24,12C17.4,12.6 12.6,17.4 12,24C11.4,17.4 6.6,12.6 0,12C6.6,11.4 11.4,6.6 12,0Z")
+    }
+}
+
+object ThemeIcons {
+    val Moon: ImageVector by lazy {
+        vectorIcon(
+            "moon", 24f,
+            "M12,3c-4.97,0 -9,4.03 -9,9s4.03,9 9,9s9,-4.03 9,-9c0,-0.46 -0.04,-0.92 -0.1,-1.36c-0.98,1.37 -2.58,2.26 -4.4,2.26c-2.98,0 -5.4,-2.42 -5.4,-5.4c0,-1.81 0.89,-3.42 2.26,-4.4C12.92,3.04 12.46,3 12,3L12,3z"
+        )
+    }
+    val Sun: ImageVector by lazy {
+        vectorIcon(
+            "sun", 24f,
+            "M12,7c-2.76,0 -5,2.24 -5,5s2.24,5 5,5s5,-2.24 5,-5S14.76,7 12,7L12,7zM2,13l2,0c0.55,0 1,-0.45 1,-1s-0.45,-1 -1,-1l-2,0c-0.55,0 -1,0.45 -1,1S1.45,13 2,13zM20,13l2,0c0.55,0 1,-0.45 1,-1s-0.45,-1 -1,-1l-2,0c-0.55,0 -1,0.45 -1,1S19.45,13 20,13zM11,2v2c0,0.55 0.45,1 1,1s1,-0.45 1,-1V2c0,-0.55 -0.45,-1 -1,-1S11,1.45 11,2zM11,20v2c0,0.55 0.45,1 1,1s1,-0.45 1,-1v-2c0,-0.55 -0.45,-1 -1,-1C11.45,19 11,19.45 11,20zM5.99,4.58c-0.39,-0.39 -1.03,-0.39 -1.41,0c-0.39,0.39 -0.39,1.03 0,1.41l1.06,1.06c0.39,0.39 1.03,0.39 1.41,0s0.39,-1.03 0,-1.41L5.99,4.58zM18.36,16.95c-0.39,-0.39 -1.03,-0.39 -1.41,0c-0.39,0.39 -0.39,1.03 0,1.41l1.06,1.06c0.39,0.39 1.03,0.39 1.41,0c0.39,-0.39 0.39,-1.03 0,-1.41L18.36,16.95zM19.42,5.99c0.39,-0.39 0.39,-1.03 0,-1.41c-0.39,-0.39 -1.03,-0.39 -1.41,0l-1.06,1.06c-0.39,0.39 -0.39,1.03 0,1.41s1.03,0.39 1.41,0L19.42,5.99zM7.05,18.36c0.39,-0.39 0.39,-1.03 0,-1.41c-0.39,-0.39 -1.03,-0.39 -1.41,0l-1.06,1.06c-0.39,0.39 -0.39,1.03 0,1.41s1.03,0.39 1.41,0L7.05,18.36z"
+        )
     }
 }
 
@@ -291,6 +357,52 @@ fun Modifier.appear(index: Int = 0): Modifier {
     }
 }
 
+// ───────────── Light / dark controls ─────────────
+/** Round button on the home page: moon switches to dark mode, sun switches back to light. */
+@Composable
+fun ThemeToggle(size: Dp = 46.dp) {
+    val context = LocalContext.current
+    val dark = AppTheme.dark
+    val turn by animateFloatAsState(if (dark) 180f else 0f, tween(450), label = "themeTurn")
+    Box(
+        Modifier.size(size)
+            .shadow(4.dp, CircleShape, ambientColor = Color(0x1A000000), spotColor = Color(0x22000000))
+            .clip(CircleShape)
+            .background(Brand.Surface)
+            .clickable { AppTheme.set(context, if (dark) AppTheme.LIGHT else AppTheme.DARK) },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            if (dark) ThemeIcons.Sun else ThemeIcons.Moon,
+            if (dark) "Switch to light mode" else "Switch to dark mode",
+            tint = if (dark) Brand.Gold else Brand.Charcoal,
+            modifier = Modifier.size(22.dp).graphicsLayer { rotationZ = turn }
+        )
+    }
+}
+
+/** Light / Dark / Auto, shown in the menu. Auto follows the phone's own setting. */
+@Composable
+fun AppearanceRow() {
+    val context = LocalContext.current
+    val labels = listOf("Light", "Dark", "Auto")
+    val modes = listOf(AppTheme.LIGHT, AppTheme.DARK, AppTheme.AUTO)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp)) {
+        Row(Modifier.padding(start = 10.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (AppTheme.dark) ThemeIcons.Moon else ThemeIcons.Sun, null, tint = Brand.Sub, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(14.dp))
+            Text("Appearance", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Brand.Ink)
+        }
+        Segmented(labels, labels[modes.indexOf(AppTheme.mode).coerceAtLeast(0)]) { label ->
+            AppTheme.set(context, modes[labels.indexOf(label)])
+        }
+        Text(
+            "Auto follows your phone's setting", fontSize = 11.sp, color = Brand.Faint,
+            modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
+        )
+    }
+}
+
 // ───────────── Building blocks ─────────────
 @Composable
 fun AppCard(
@@ -308,7 +420,7 @@ fun AppCard(
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(6.dp, shape, ambientColor = Color(0x14000000), spotColor = Color(0x1F000000))
             .clip(shape)
-            .background(Color.White)
+            .background(Brand.Surface)
             .border(1.dp, Brand.Line, shape)
             .then(
                 if (onClick != null) Modifier.clickable(
@@ -367,16 +479,19 @@ private val avatarColors = listOf(
 @Composable
 fun Avatar(name: String, size: Dp = 48.dp, ring: Boolean = false) {
     val colors = avatarColors[(name.trim().lowercase().hashCode() and 0x7fffffff) % avatarColors.size]
+    val dark = AppTheme.dark
+    val bg = if (dark) colors.second.copy(alpha = 0.35f) else colors.first
+    val fg = if (dark) colors.first else colors.second
     val initials = name.trim().split(" ").filter { it.isNotBlank() }.take(2)
         .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
     Box(
         Modifier.size(size)
             .then(if (ring) Modifier.border(3.dp, BrandGradient, CircleShape).padding(5.dp) else Modifier)
             .clip(CircleShape)
-            .background(colors.first),
+            .background(bg),
         contentAlignment = Alignment.Center
     ) {
-        Text(initials, color = colors.second, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.34f).sp)
+        Text(initials, color = fg, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.34f).sp)
     }
 }
 
@@ -424,6 +539,7 @@ fun GradientButton(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.96f else 1f, label = "buttonPress")
+    val off = if (AppTheme.dark) Color(0xFF39413D) else Color(0xFFCFD5CC)
     Row(
         modifier.height(height)
             .graphicsLayer { scaleX = scale; scaleY = scale }
@@ -434,7 +550,7 @@ fun GradientButton(
                 ) else Modifier
             )
             .clip(shape)
-            .background(if (enabled) BrandGradient else SolidColor(Color(0xFFCFD5CC)))
+            .background(if (enabled) BrandGradient else SolidColor(off))
             .clickable(interactionSource = interaction, indication = LocalIndication.current, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -482,14 +598,14 @@ fun SoftButton(
 fun CircleIconButton(
     icon: ImageVector,
     onClick: () -> Unit,
-    bg: Color = Color.White,
+    bg: Color = Brand.Surface,
     tint: Color = Brand.Ink,
     size: Dp = 46.dp
 ) {
     Box(
         Modifier.size(size)
             .then(
-                if (bg == Color.White) Modifier.shadow(
+                if (bg == Brand.Surface) Modifier.shadow(
                     4.dp, CircleShape, ambientColor = Color(0x1A000000), spotColor = Color(0x22000000)
                 ) else Modifier
             )
@@ -527,7 +643,7 @@ fun ChoiceChip(
     selectedBg: Color = Brand.GreenDeep,
     onClick: () -> Unit
 ) {
-    val bg by animateColorAsState(if (selected) selectedBg else Color.White, label = "chipBg")
+    val bg by animateColorAsState(if (selected) selectedBg else Brand.Surface, label = "chipBg")
     val fg by animateColorAsState(if (selected) Color.White else Brand.Ink, label = "chipFg")
     val shape = RoundedCornerShape(50)
     Row(
@@ -550,7 +666,7 @@ fun Segmented(options: List<String>, selected: String, onSelect: (String) -> Uni
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brand.Soft).padding(4.dp)) {
         options.forEach { option ->
             val isSelected = option == selected
-            val bg by animateColorAsState(if (isSelected) Color.White else Color.Transparent, label = "segment")
+            val bg by animateColorAsState(if (isSelected) Brand.Surface else Color.Transparent, label = "segment")
             Box(
                 Modifier.weight(1f).height(46.dp)
                     .then(if (isSelected) Modifier.shadow(3.dp, RoundedCornerShape(12.dp)) else Modifier)
@@ -591,9 +707,11 @@ fun AppField(
         keyboardOptions = KeyboardOptions(capitalization = caps, keyboardType = type),
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Brand.Ink, unfocusedTextColor = Brand.Ink,
             focusedBorderColor = Brand.GreenDeep, unfocusedBorderColor = Brand.Line,
             focusedLabelColor = Brand.GreenDeep, cursorColor = Brand.GreenDeep,
-            focusedContainerColor = Color.White, unfocusedContainerColor = Color(0xFFFBFCFA)
+            focusedContainerColor = Brand.Surface,
+            unfocusedContainerColor = if (AppTheme.dark) Brand.Surface else Color(0xFFFBFCFA)
         ),
         modifier = modifier
     )
@@ -623,7 +741,7 @@ fun SearchBox(value: String, onChange: (String) -> Unit) {
         if (value.isNotEmpty()) {
             Spacer(Modifier.width(8.dp))
             Box(
-                Modifier.size(28.dp).clip(CircleShape).background(Color.White).clickable { onChange("") },
+                Modifier.size(28.dp).clip(CircleShape).background(Brand.Surface).clickable { onChange("") },
                 contentAlignment = Alignment.Center
             ) { Icon(Icons.Filled.Close, null, tint = Brand.Sub, modifier = Modifier.size(16.dp)) }
         }
@@ -651,7 +769,7 @@ fun AppTopBar(title: String, subtitle: String?, onBack: () -> Unit, actions: @Co
 @Composable
 fun BottomActionBar(content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().shadow(16.dp).background(Color.White)
+        Modifier.fillMaxWidth().shadow(16.dp).background(Brand.Surface)
             .navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -729,7 +847,8 @@ fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boo
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White, checkedTrackColor = Brand.Green,
-                uncheckedThumbColor = Color.White, uncheckedTrackColor = Color(0xFFD5DAD2),
+                uncheckedThumbColor = Color.White,
+                uncheckedTrackColor = if (AppTheme.dark) Color(0xFF3A4440) else Color(0xFFD5DAD2),
                 uncheckedBorderColor = Color.Transparent
             )
         )
@@ -741,7 +860,7 @@ fun NotifyBanner(text: String) {
     val success = text.contains("✓")
     Row(
         Modifier.shadow(18.dp, RoundedCornerShape(50), ambientColor = Color(0x33000000), spotColor = Color(0x55000000))
-            .clip(RoundedCornerShape(50)).background(Brand.Charcoal)
+            .clip(RoundedCornerShape(50)).background(Brand.Night)
             .padding(start = 10.dp, end = 22.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -768,7 +887,7 @@ fun ConfirmDialog(
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(26.dp)
+                .background(Brand.Surface).padding(26.dp)
         ) {
             Box(
                 Modifier.size(56.dp).clip(CircleShape).background(if (danger) Brand.RedSoft else Brand.GreenSoft),
@@ -803,7 +922,7 @@ fun BusyDialog(text: String) {
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
         Row(
-            Modifier.clip(RoundedCornerShape(24.dp)).background(Color.White).padding(horizontal = 26.dp, vertical = 22.dp),
+            Modifier.clip(RoundedCornerShape(24.dp)).background(Brand.Surface).padding(horizontal = 26.dp, vertical = 22.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             CircularProgressIndicator(color = Brand.GreenDeep, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
