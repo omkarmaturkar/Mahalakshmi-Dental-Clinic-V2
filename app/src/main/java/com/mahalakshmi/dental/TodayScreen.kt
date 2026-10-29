@@ -1,7 +1,8 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package com.mahalakshmi.dental
 
 import android.content.Context
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,10 +15,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -25,22 +28,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -48,7 +50,10 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 // ───────────── Colours & icons of the home page ─────────────
 object HomeColors {
@@ -147,6 +152,8 @@ private class HomeData(
     val clinicName: String,
     val doctorName: String,
     val bookings: List<DayBooking>,
+    val next: DayBooking?,
+    val nextPatient: Patient?,
     val newToday: Int,
     val newWeek: Int,
     val collected: Double,
@@ -163,6 +170,30 @@ private class HomeAlert(
     val title: String, val sub: String, val onClick: () -> Unit
 )
 
+private fun minutesNow(): Int = LocalTime.now().let { it.hour * 60 + it.minute }
+
+/** "in 25 min", "now", "Tomorrow"… for the next-patient card. */
+private fun whenLabel(b: DayBooking): String {
+    if (b.day != todayEpochDay()) return fmtDay(b.day)
+    if (b.time.isBlank()) return "today"
+    val at = timeMinutes(b.time)
+    if (at >= 24 * 60) return "today"
+    val diff = at - minutesNow()
+    return when {
+        diff > 59 -> "in ${diff / 60} hr" + if (diff % 60 > 0) " ${diff % 60} min" else ""
+        diff > 0 -> "in $diff min"
+        diff >= -15 -> "now"
+        else -> "waiting"
+    }
+}
+
+/** "Dr. Tushar Maturkar" → "Dr. Tushar" */
+private fun shortDoctor(name: String): String {
+    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    if (parts.isEmpty()) return "Doctor"
+    return if (parts.size > 1 && parts[0].trimEnd('.').equals("dr", ignoreCase = true)) "Dr. ${parts[1]}" else parts[0]
+}
+
 /** Loads everything for the home page. If anything goes wrong, the page still opens and the problem is recorded. */
 private fun loadHome(db: ClinicDb, context: Context): HomeData = try {
     val everyone = db.getPatients("")
@@ -170,12 +201,19 @@ private fun loadHome(db: ClinicDb, context: Context): HomeData = try {
     val now = System.currentTimeMillis()
     val dayMs = 24L * 60 * 60 * 1000
     val weekStart = LocalDate.now().with(DayOfWeek.MONDAY).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-    val booked = db.bookingsBetween(today, today + 60).map { it.patientId }.toSet()
+    val ahead = db.bookingsBetween(today, today + 60)
+    val booked = ahead.map { it.patientId }.toSet()
+    val pending = ahead.filter { it.status == 0 }
+    val nowMin = minutesNow()
+    val next = pending.firstOrNull { it.day > today || it.time.isBlank() || timeMinutes(it.time) >= nowMin - 60 }
+        ?: pending.firstOrNull()
     val lastBackup = maxOf(DriveBackup.lastBackup(context), Backup.lastBackup(context))
     HomeData(
         clinicName = db.clinicInfo().name,
         doctorName = db.mainDoctor()?.name?.takeIf { it.isNotBlank() } ?: "Doctor",
-        bookings = db.bookingsBetween(today, today),
+        bookings = ahead.filter { it.day == today },
+        next = next,
+        nextPatient = next?.let { b -> everyone.firstOrNull { it.id == b.patientId } },
         newToday = db.newPatientsSince(startOfToday()),
         newWeek = db.newPatientsSince(weekStart),
         collected = db.stats().todayCollection,
@@ -188,14 +226,7 @@ private fun loadHome(db: ClinicDb, context: Context): HomeData = try {
     )
 } catch (e: Throwable) {
     CrashGuard.save(context, e)
-    HomeData(DEFAULT_CLINIC_NAME, "Doctor", emptyList(), 0, 0, 0.0, 0, emptyList(), emptyList(), true)
-}
-
-/** Moves content up so it overlaps whatever is above it (used for the cards over the green header). */
-private fun Modifier.pullUp(by: Dp): Modifier = this.layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints)
-    val px = by.roundToPx()
-    layout(placeable.width, (placeable.height - px).coerceAtLeast(0)) { placeable.place(0, -px) }
+    HomeData(DEFAULT_CLINIC_NAME, "Doctor", emptyList(), null, null, 0, 0, 0.0, 0, emptyList(), emptyList(), true)
 }
 
 // ───────────── Home page ─────────────
@@ -217,9 +248,13 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
     val done = data.bookings.count { it.status == 1 }
     val waiting = data.bookings.count { it.status == 0 }
     val words = data.clinicName.trim().split(" ").filter { it.isNotBlank() }
+    val dateLine = remember(version) {
+        val day = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()))
+        if (data.bookings.isEmpty()) day else "$day  ·  ${data.bookings.size} booked today"
+    }
     val alerts = buildList<HomeAlert> {
         if (waiting > 0) {
-            add(HomeAlert(HomeIcons.Calendar, HomeColors.Teal, HomeColors.TealSoft,
+            add(HomeAlert(HomeIcons.Calendar, Brand.GreenDeep, Brand.GreenSoft,
                 if (waiting == 1) "1 appointment waiting today" else "$waiting appointments waiting today",
                 "Open today's schedule") { go(Screen.Schedule) })
         }
@@ -234,7 +269,7 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
             })
         }
         if (data.recall.isNotEmpty()) {
-            add(HomeAlert(HomeIcons.People, HomeColors.Teal, HomeColors.TealSoft,
+            add(HomeAlert(HomeIcons.People, Brand.GreenDeep, Brand.GreenSoft,
                 "${data.recall.size} due for a check-up", "Send them a reminder from the home page") {})
         }
     }
@@ -245,53 +280,67 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
         HomeAction("Record payment", HomeIcons.Wallet) { picker = "payment" }
     )
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(HomeColors.Page)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Brand.Bg)) {
         val wide = maxWidth >= 760.dp
         val side = if (wide) 28.dp else 20.dp
 
+        val spotlight: @Composable () -> Unit = {
+            val b = data.next
+            SpotlightCard(
+                next = b,
+                patient = data.nextPatient,
+                onCall = { if (b != null) callNumber(context, b.phone) },
+                onRemind = { if (b != null) openWhatsApp(context, b.phone, appointmentReminder(b, data.clinicName)) },
+                onPrimary = {
+                    if (b != null) go(if (b.day == todayEpochDay()) Screen.VisitForm(b.patientId) else Screen.PatientDetail(b.patientId))
+                },
+                onOpen = { if (b != null) go(Screen.PatientDetail(b.patientId)) },
+                onBook = { picker = "book" }
+            )
+        }
+        val metrics: @Composable () -> Unit = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricCard(
+                        "Collected today", rs(data.collected), Brand.GreenDeep,
+                        if (data.paymentsToday == 1) "1 payment" else "${data.paymentsToday} payments",
+                        HomeIcons.Rupee, Modifier.weight(1f)
+                    ) { go(Screen.Finance) }
+                    MetricCard(
+                        "Appointments", "${data.bookings.size}", Brand.Ink,
+                        if (data.bookings.isEmpty()) "None today" else "$done done · $waiting left",
+                        HomeIcons.Calendar, Modifier.weight(1f)
+                    ) { go(Screen.Schedule) }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MetricCard(
+                        "New patients", "${data.newToday}", Brand.Ink, "${data.newWeek} this week",
+                        HomeIcons.PersonAdd, Modifier.weight(1f)
+                    ) { go(Screen.Patients()) }
+                    MetricCard(
+                        "Pending dues", rs(dueTotal), if (dueTotal > 0.01) HomeColors.DueRed else Brand.GreenDeep,
+                        if (data.dues.size == 1) "1 patient" else "${data.dues.size} patients",
+                        HomeIcons.Clock, Modifier.weight(1f)
+                    ) { go(Screen.Patients(filter = 1)) }
+                }
+            }
+        }
         val quickSection: @Composable (Int) -> Unit = { perRow ->
-            Text("Quick actions", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
-            Spacer(Modifier.height(14.dp))
+            HomeSectionTitle("Quick actions")
+            Spacer(Modifier.height(12.dp))
             actions.chunked(perRow).forEach { row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
                     row.forEach { a -> QuickTile(a.label, a.icon, Modifier.weight(1f), a.onClick) }
                 }
             }
         }
-        val appointmentsSection: @Composable () -> Unit = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Today's appointments", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    if (data.bookings.isEmpty()) "Schedule" else "See all ${data.bookings.size}",
-                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = HomeColors.TealText,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { go(Screen.Schedule) }.padding(6.dp)
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            if (data.bookings.isEmpty()) {
-                WhiteCard(padding = 18.dp) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(HomeColors.TealSoft),
-                            contentAlignment = Alignment.Center
-                        ) { Icon(HomeIcons.Calendar, null, tint = HomeColors.Teal, modifier = Modifier.size(24.dp)) }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("No appointments today", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink)
-                            Text("Book a patient's next visit in a few taps", fontSize = 13.sp, color = Brand.Sub)
-                        }
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    SoftButton(
-                        "Book appointment", HomeIcons.CalendarAdd, Modifier.fillMaxWidth(),
-                        bg = HomeColors.TealSoft, fg = HomeColors.TealText
-                    ) { picker = "book" }
-                }
-            } else {
-                WhiteCard(padding = 0.dp) {
+        val scheduleSection: @Composable () -> Unit = {
+            val showList = data.bookings.size >= 2 || (data.bookings.size == 1 && data.next?.id != data.bookings[0].id)
+            if (showList) {
+                Spacer(Modifier.height(24.dp))
+                HomeSectionTitle("Today's schedule", "See all ${data.bookings.size}") { go(Screen.Schedule) }
+                Spacer(Modifier.height(10.dp))
+                AppCard(Modifier.fillMaxWidth(), padding = 0.dp) {
                     data.bookings.take(8).forEachIndexed { i, b ->
                         if (i > 0) HorizontalDivider(color = Brand.Line, modifier = Modifier.padding(horizontal = 16.dp))
                         HomeAppointmentRow(
@@ -306,14 +355,14 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
         }
         val recallSection: @Composable () -> Unit = {
             if (data.recall.isNotEmpty()) {
-                Spacer(Modifier.height(26.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Due for check-up", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, modifier = Modifier.weight(1f))
-                    Pill("${data.recall.size}", HomeColors.AmberSoft, HomeColors.Amber)
-                }
+                Spacer(Modifier.height(24.dp))
+                HomeSectionTitle(
+                    "Recalls due",
+                    if (data.recall.size > 4) (if (showAllRecall) "Show less" else "See all ${data.recall.size}") else null
+                ) { showAllRecall = !showAllRecall }
                 Text("Last visit more than 6 months ago", fontSize = 13.sp, color = Brand.Sub)
                 Spacer(Modifier.height(10.dp))
-                WhiteCard(padding = 0.dp) {
+                AppCard(Modifier.fillMaxWidth(), padding = 0.dp) {
                     val shown = if (showAllRecall) data.recall else data.recall.take(4)
                     shown.forEachIndexed { i, p ->
                         if (i > 0) HorizontalDivider(color = Brand.Line, modifier = Modifier.padding(horizontal = 16.dp))
@@ -325,136 +374,106 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                             Avatar(p.name, 40.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
                                 Text("Last visit: ${relativeTime(p.lastVisit)}", fontSize = 12.sp, color = Brand.Sub, maxLines = 1)
                             }
-                            SoftButton("Remind", AppIcons.Chat, height = 38.dp, bg = HomeColors.TealSoft, fg = HomeColors.TealText) {
-                                openWhatsApp(context, p.phone, recallMessage(p, data.clinicName))
-                            }
+                            Box(
+                                Modifier.size(42.dp).clip(CircleShape).background(Brand.GreenSoft)
+                                    .clickable { openWhatsApp(context, p.phone, recallMessage(p, data.clinicName)) },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(AppIcons.Chat, "Send reminder", tint = Brand.GreenDeep, modifier = Modifier.size(20.dp)) }
                         }
-                    }
-                    if (data.recall.size > 4) {
-                        Text(
-                            if (showAllRecall) "Show less" else "Show all ${data.recall.size}",
-                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = HomeColors.TealText,
-                            modifier = Modifier.fillMaxWidth().clickable { showAllRecall = !showAllRecall }.padding(16.dp),
-                            textAlign = TextAlign.Center
-                        )
                     }
                 }
             }
         }
 
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            // ───── Teal header ─────
-            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(bottomStart = 44.dp)).background(HomeColors.Teal)) {
-                Column(Modifier.fillMaxWidth().statusBarsPadding().padding(start = side, end = side, top = 14.dp, bottom = 64.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (openMenu != null) {
-                            HeaderButton(Icons.Filled.Menu, onClick = openMenu)
-                            Spacer(Modifier.width(14.dp))
-                        }
-                        LogoBadge()
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                words.firstOrNull() ?: data.clinicName, color = Color.White, fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
-                            val rest = words.drop(1).joinToString(" ")
-                            if (rest.isNotBlank()) {
-                                Text(rest, color = Color.White.copy(alpha = 0.85f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                        HeaderButton(HomeIcons.Bell, dot = alerts.isNotEmpty()) { alertsOpen = true }
-                    }
-                    Spacer(Modifier.height(28.dp))
-                    Text("${greeting()},", color = Color.White.copy(alpha = 0.8f), fontSize = 17.sp)
+            // ───── Top bar ─────
+            Row(
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = side, end = side, top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (openMenu != null) {
+                    CircleIconButton(Icons.Filled.Menu, openMenu)
+                    Spacer(Modifier.width(10.dp))
+                }
+                LogoTile(42.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
                     Text(
-                        data.doctorName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 32.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                        words.firstOrNull() ?: data.clinicName, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                        color = Brand.Charcoal, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
-                    Text(fmtDayLong(todayEpochDay()), color = Color.White.copy(alpha = 0.72f), fontSize = 15.sp)
-                    Spacer(Modifier.height(22.dp))
-                    Row(
-                        Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(18.dp)).background(Color.White)
-                            .clickable { go(Screen.Patients(focusSearch = true)) }.padding(horizontal = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Filled.Search, null, tint = Brand.Sub, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(14.dp))
-                        Text(
-                            "Search patient by name or mobile no.", fontSize = 15.sp, color = Brand.Faint,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                    val rest = words.drop(1).joinToString(" ")
+                    if (rest.isNotBlank()) {
+                        Text(rest, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                CircleIconButton(Icons.Filled.Search, { go(Screen.Patients(focusSearch = true)) })
+                Spacer(Modifier.width(8.dp))
+                Box {
+                    CircleIconButton(HomeIcons.Bell, { alertsOpen = true })
+                    if (alerts.isNotEmpty()) {
+                        Box(
+                            Modifier.align(Alignment.TopEnd).padding(top = 7.dp, end = 7.dp).size(10.dp)
+                                .clip(CircleShape).background(HomeColors.Dot)
                         )
                     }
                 }
             }
 
-            // ───── Four cards, overlapping the header ─────
-            val appointmentsTile: @Composable (Modifier) -> Unit = { m ->
-                StatTile(
-                    HomeIcons.Calendar, HomeColors.Teal, HomeColors.TealSoft, "${data.bookings.size}", Brand.Ink,
-                    "Appointments today", if (data.bookings.isEmpty()) "None booked yet" else "$done done · $waiting to go", m
-                ) { go(Screen.Schedule) }
-            }
-            val newTile: @Composable (Modifier) -> Unit = { m ->
-                StatTile(
-                    HomeIcons.PersonAdd, HomeColors.Teal, HomeColors.TealSoft, "${data.newToday}", Brand.Ink,
-                    "New patients", "${data.newWeek} this week", m
-                ) { go(Screen.Patients()) }
-            }
-            val collectedTile: @Composable (Modifier) -> Unit = { m ->
-                StatTile(
-                    HomeIcons.Rupee, HomeColors.Teal, HomeColors.TealSoft, rs(data.collected), Brand.Ink,
-                    "Collected today", if (data.paymentsToday == 1) "1 payment" else "${data.paymentsToday} payments", m
-                ) { go(Screen.Finance) }
-            }
-            val duesTile: @Composable (Modifier) -> Unit = { m ->
-                StatTile(
-                    HomeIcons.Clock, HomeColors.Amber, HomeColors.AmberSoft, rs(dueTotal),
-                    if (dueTotal > 0) HomeColors.DueRed else Brand.GreenDeep,
-                    "Pending dues", if (data.dues.size == 1) "1 patient" else "${data.dues.size} patients", m
-                ) { go(Screen.Patients(filter = 1)) }
-            }
-            Column(Modifier.padding(horizontal = side).pullUp(44.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (wide) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        appointmentsTile(Modifier.weight(1f))
-                        newTile(Modifier.weight(1f))
-                        collectedTile(Modifier.weight(1f))
-                        duesTile(Modifier.weight(1f))
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        appointmentsTile(Modifier.weight(1f))
-                        newTile(Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        collectedTile(Modifier.weight(1f))
-                        duesTile(Modifier.weight(1f))
-                    }
+            // ───── Greeting ─────
+            Row(
+                Modifier.fillMaxWidth().padding(start = side, end = side, top = 22.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(greeting(), fontSize = 14.sp, color = Brand.Sub)
+                    Text(
+                        shortDoctor(data.doctorName), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Brand.Ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                    Text(dateLine, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.width(12.dp))
+                Box(Modifier.clip(CircleShape).clickable { go(Screen.ClinicSettings) }) {
+                    Avatar(data.doctorName.replace(Regex("^(?i)dr\\.?\\s+"), "").ifBlank { "Doctor" }, 54.dp, ring = true)
                 }
             }
 
-            // ───── Quick actions, appointments, check-ups ─────
-            Column(Modifier.padding(horizontal = side).padding(top = 24.dp, bottom = 28.dp)) {
-                if (wide) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column(Modifier.weight(1.4f)) {
-                            appointmentsSection()
-                            recallSection()
-                        }
-                        Column(Modifier.weight(1f)) { quickSection(2) }
+            // ───── Content ─────
+            if (wide) {
+                Row(
+                    Modifier.padding(start = side, end = side, top = 20.dp, bottom = 28.dp),
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                ) {
+                    Column(Modifier.weight(1.3f)) {
+                        spotlight()
+                        scheduleSection()
+                        recallSection()
                     }
-                } else {
-                    quickSection(4)
+                    Column(Modifier.weight(1f)) {
+                        metrics()
+                        Spacer(Modifier.height(24.dp))
+                        quickSection(2)
+                    }
+                }
+            } else {
+                Column(Modifier.padding(start = side, end = side, top = 20.dp, bottom = 28.dp)) {
+                    spotlight()
                     Spacer(Modifier.height(16.dp))
-                    appointmentsSection()
+                    metrics()
+                    Spacer(Modifier.height(24.dp))
+                    quickSection(4)
+                    scheduleSection()
                     recallSection()
                 }
-                Spacer(Modifier.navigationBarsPadding())
             }
+            Spacer(Modifier.navigationBarsPadding())
         }
     }
 
@@ -510,81 +529,171 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
 
 // ───────────── Pieces of the home page ─────────────
 @Composable
-private fun HeaderButton(icon: ImageVector, dot: Boolean = false, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp)) {
-        Box(
-            Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.14f)).clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp)) }
-        if (dot) Box(Modifier.align(Alignment.TopEnd).padding(7.dp).size(10.dp).clip(CircleShape).background(HomeColors.Dot))
-    }
-}
-
-@Composable
-private fun LogoBadge() {
-    Box(
-        Modifier.size(54.dp).clip(CircleShape).background(Color.White).border(2.5.dp, Brand.Gold, CircleShape).padding(7.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(R.drawable.clinic_logo), contentDescription = null,
-            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().clip(CircleShape)
-        )
-    }
-}
-
-@Composable
-private fun WhiteCard(padding: Dp, content: @Composable ColumnScope.() -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
+private fun SpotlightCard(
+    next: DayBooking?,
+    patient: Patient?,
+    onCall: () -> Unit,
+    onRemind: () -> Unit,
+    onPrimary: () -> Unit,
+    onOpen: () -> Unit,
+    onBook: () -> Unit
+) {
+    val shape = RoundedCornerShape(28.dp)
     Column(
-        Modifier.fillMaxWidth().shadow(8.dp, shape, ambientColor = Color(0x12000000), spotColor = Color(0x1C000000))
-            .clip(shape).background(Color.White).padding(padding),
-        content = content
-    )
+        Modifier.fillMaxWidth()
+            .shadow(18.dp, shape, ambientColor = Color(0x33000000), spotColor = Color(0x4D000000))
+            .clip(shape)
+            .background(CharcoalGradient)
+            .drawBehind {
+                val c = Offset(size.width * 0.95f, 0f)
+                val r = size.width * 0.6f
+                drawCircle(
+                    Brush.radialGradient(listOf(Brand.Green.copy(alpha = 0.45f), Color.Transparent), center = c, radius = r),
+                    radius = r, center = c
+                )
+            }
+            .padding(20.dp)
+    ) {
+        if (next == null) {
+            SpotLabel("No patients booked", null)
+            Spacer(Modifier.height(10.dp))
+            Text("Your schedule is open", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+            Text("Book a patient's next visit in a few taps", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
+            Spacer(Modifier.height(16.dp))
+            GradientButton("Book appointment", Modifier.fillMaxWidth(), HomeIcons.CalendarAdd, height = 48.dp, onClick = onBook)
+        } else {
+            SpotLabel("Next patient · ${whenLabel(next)}", next.time.ifBlank { null })
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpen),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Avatar(next.name, 50.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        next.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        next.reason.ifBlank { "Check-up" }, color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            val balance = patient?.remaining ?: 0.0
+            val medical = patient?.alerts.orEmpty()
+            if (balance > 0.01 || medical.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (balance > 0.01) DarkChip("Balance ${rs(balance)}", Color(0xFFFFC94D), Color(0x33F5A800), null)
+                    if (medical.isNotEmpty()) {
+                        DarkChip(medical.take(2).joinToString(" · "), Color(0xFFFF9A9E), Color(0x33E5484D), Icons.Filled.Warning)
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (next.phone.isNotBlank()) {
+                    GlassIcon(Icons.Filled.Call, "Call", onCall)
+                    Spacer(Modifier.width(8.dp))
+                    GlassIcon(AppIcons.Chat, "Send reminder", onRemind)
+                    Spacer(Modifier.width(10.dp))
+                }
+                GradientButton(
+                    if (next.day == todayEpochDay()) "Start visit" else "Open file",
+                    Modifier.weight(1f), height = 48.dp, onClick = onPrimary
+                )
+            }
+        }
+    }
 }
 
 @Composable
-private fun StatTile(
-    icon: ImageVector,
-    tint: Color,
-    soft: Color,
+private fun SpotLabel(text: String, trailing: String?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(Brand.Gold))
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text, color = Brand.Gold, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+        )
+        if (trailing != null) {
+            Text(trailing, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun DarkChip(text: String, fg: Color, bg: Color, icon: ImageVector?) {
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = fg, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(text, color = fg, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun GlassIcon(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.13f)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) { Icon(icon, label, tint = Color.White, modifier = Modifier.size(22.dp)) }
+}
+
+@Composable
+private fun MetricCard(
+    label: String,
     value: String,
     valueColor: Color,
-    label: String,
     sub: String,
+    icon: ImageVector,
     modifier: Modifier,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(24.dp)
-    Column(
-        modifier.shadow(10.dp, shape, ambientColor = Color(0x14000000), spotColor = Color(0x22000000))
-            .clip(shape).background(Color.White).clickable(onClick = onClick).padding(18.dp)
-    ) {
-        Box(Modifier.size(46.dp).clip(RoundedCornerShape(14.dp)).background(soft), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
+    AppCard(modifier, onClick = onClick, padding = 16.dp) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Icon(icon, null, tint = Brand.Faint, modifier = Modifier.size(18.dp))
         }
-        Spacer(Modifier.height(16.dp))
-        Text(value, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(2.dp))
-        Text(sub, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(6.dp))
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sub, fontSize = 12.sp, color = Brand.Faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun HomeSectionTitle(title: String, action: String? = null, onAction: () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, modifier = Modifier.weight(1f))
+        if (action != null) {
+            Text(
+                action, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenText,
+                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onAction).padding(6.dp)
+            )
+        }
     }
 }
 
 @Composable
 private fun QuickTile(label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(20.dp)
     Column(
         modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 4.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            Modifier.size(66.dp).shadow(4.dp, shape, ambientColor = Color(0x10000000), spotColor = Color(0x18000000))
+            Modifier.size(60.dp).shadow(4.dp, shape, ambientColor = Color(0x10000000), spotColor = Color(0x18000000))
                 .clip(shape).background(Color.White).border(1.dp, Brand.Line, shape),
             contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = HomeColors.Teal, modifier = Modifier.size(28.dp)) }
-        Spacer(Modifier.height(10.dp))
-        Text(label, fontSize = 13.sp, color = Brand.Ink, textAlign = TextAlign.Center, lineHeight = 17.sp, maxLines = 2)
+        ) { Icon(icon, null, tint = Brand.GreenDeep, modifier = Modifier.size(26.dp)) }
+        Spacer(Modifier.height(8.dp))
+        Text(label, fontSize = 12.sp, color = Brand.Ink, textAlign = TextAlign.Center, lineHeight = 16.sp, maxLines = 2)
     }
 }
 
@@ -594,21 +703,24 @@ private fun HomeAppointmentRow(b: DayBooking, wide: Boolean, onOpen: () -> Unit,
         Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Avatar(b.name, 42.dp)
+        Text(
+            b.time.ifBlank { "Any time" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            color = Brand.GreenText, modifier = Modifier.width(70.dp)
+        )
+        Avatar(b.name, 40.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(b.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = listOf(b.time.ifBlank { "Any time" }, b.reason).filter { it.isNotBlank() }.joinToString("  ·  ")
-            Text(sub, fontSize = 12.sp, color = HomeColors.TealText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(b.reason.ifBlank { "Check-up" }, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (b.status == 1) {
             Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
         } else {
             if (wide && b.phone.isNotBlank()) {
-                CircleIconButton(AppIcons.Chat, onRemind, bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 38.dp)
+                CircleIconButton(AppIcons.Chat, onRemind, bg = Brand.GreenSoft, tint = Brand.GreenDeep, size = 38.dp)
                 Spacer(Modifier.width(8.dp))
             }
-            SoftButton("Start", null, height = 38.dp, bg = HomeColors.TealSoft, fg = HomeColors.TealText, onClick = onStart)
+            SoftButton("Start", null, height = 38.dp, onClick = onStart)
         }
     }
 }
@@ -681,7 +793,7 @@ fun PatientPickerDialog(db: ClinicDb, title: String, onDismiss: () -> Unit, onPi
                         onValueChange = { query = it },
                         singleLine = true,
                         textStyle = TextStyle(fontFamily = Poppins, fontSize = 15.sp, color = Brand.Ink),
-                        cursorBrush = SolidColor(HomeColors.Teal),
+                        cursorBrush = SolidColor(Brand.GreenDeep),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus)
                     )
                 }
