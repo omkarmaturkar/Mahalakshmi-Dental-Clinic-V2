@@ -1,14 +1,18 @@
-@file:OptIn(ExperimentalLayoutApi::class)
+@file:OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 
 package com.mahalakshmi.dental
 
 import android.content.Context
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -152,8 +156,8 @@ private class HomeData(
     val clinicName: String,
     val doctorName: String,
     val bookings: List<DayBooking>,
-    val next: DayBooking?,
-    val nextPatient: Patient?,
+    val queue: List<DayBooking>,
+    val folks: Map<Long, Patient>,
     val newToday: Int,
     val newWeek: Int,
     val collected: Double,
@@ -172,7 +176,7 @@ private class HomeAlert(
 
 private fun minutesNow(): Int = LocalTime.now().let { it.hour * 60 + it.minute }
 
-/** "in 25 min", "now", "Tomorrow"… for the next-patient card. */
+/** "in 25 min", "now", "Tomorrow"… for the patient card. */
 private fun whenLabel(b: DayBooking): String {
     if (b.day != todayEpochDay()) return fmtDay(b.day)
     if (b.time.isBlank()) return "today"
@@ -205,15 +209,18 @@ private fun loadHome(db: ClinicDb, context: Context): HomeData = try {
     val booked = ahead.map { it.patientId }.toSet()
     val pending = ahead.filter { it.status == 0 }
     val nowMin = minutesNow()
-    val next = pending.firstOrNull { it.day > today || it.time.isBlank() || timeMinutes(it.time) >= nowMin - 60 }
-        ?: pending.firstOrNull()
+    // The swipeable card: everyone still to come on the next clinic day (today, if anyone is left today)
+    val first = pending.indexOfFirst { it.day > today || it.time.isBlank() || timeMinutes(it.time) >= nowMin - 60 }
+    val from = if (first >= 0) pending.drop(first) else pending
+    val queue = from.filter { it.day == from.firstOrNull()?.day }
+    val queueIds = queue.map { it.patientId }.toSet()
     val lastBackup = maxOf(DriveBackup.lastBackup(context), Backup.lastBackup(context))
     HomeData(
         clinicName = db.clinicInfo().name,
         doctorName = db.mainDoctor()?.name?.takeIf { it.isNotBlank() } ?: "Doctor",
         bookings = ahead.filter { it.day == today },
-        next = next,
-        nextPatient = next?.let { b -> everyone.firstOrNull { it.id == b.patientId } },
+        queue = queue,
+        folks = everyone.filter { it.id in queueIds }.associateBy { it.id },
         newToday = db.newPatientsSince(startOfToday()),
         newWeek = db.newPatientsSince(weekStart),
         collected = db.stats().todayCollection,
@@ -226,7 +233,7 @@ private fun loadHome(db: ClinicDb, context: Context): HomeData = try {
     )
 } catch (e: Throwable) {
     CrashGuard.save(context, e)
-    HomeData(DEFAULT_CLINIC_NAME, "Doctor", emptyList(), null, null, 0, 0, 0.0, 0, emptyList(), emptyList(), true)
+    HomeData(DEFAULT_CLINIC_NAME, "Doctor", emptyList(), emptyList(), emptyMap(), 0, 0, 0.0, 0, emptyList(), emptyList(), true)
 }
 
 // ───────────── Home page ─────────────
@@ -285,16 +292,15 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
         val side = if (wide) 28.dp else 20.dp
 
         val spotlight: @Composable () -> Unit = {
-            val b = data.next
             SpotlightCard(
-                next = b,
-                patient = data.nextPatient,
-                onCall = { if (b != null) callNumber(context, b.phone) },
-                onRemind = { if (b != null) openWhatsApp(context, b.phone, appointmentReminder(b, data.clinicName)) },
-                onPrimary = {
-                    if (b != null) go(if (b.day == todayEpochDay()) Screen.VisitForm(b.patientId) else Screen.PatientDetail(b.patientId))
+                queue = data.queue,
+                folks = data.folks,
+                onCall = { b -> callNumber(context, b.phone) },
+                onRemind = { b -> openWhatsApp(context, b.phone, appointmentReminder(b, data.clinicName)) },
+                onPrimary = { b ->
+                    go(if (b.day == todayEpochDay()) Screen.VisitForm(b.patientId) else Screen.PatientDetail(b.patientId))
                 },
-                onOpen = { if (b != null) go(Screen.PatientDetail(b.patientId)) },
+                onOpen = { b -> go(Screen.PatientDetail(b.patientId)) },
                 onBook = { picker = "book" }
             )
         }
@@ -331,25 +337,6 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
             actions.chunked(perRow).forEach { row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
                     row.forEach { a -> QuickTile(a.label, a.icon, Modifier.weight(1f), a.onClick) }
-                }
-            }
-        }
-        val scheduleSection: @Composable () -> Unit = {
-            val showList = data.bookings.size >= 2 || (data.bookings.size == 1 && data.next?.id != data.bookings[0].id)
-            if (showList) {
-                Spacer(Modifier.height(24.dp))
-                HomeSectionTitle("Today's schedule", "See all ${data.bookings.size}") { go(Screen.Schedule) }
-                Spacer(Modifier.height(10.dp))
-                AppCard(Modifier.fillMaxWidth(), padding = 0.dp) {
-                    data.bookings.take(8).forEachIndexed { i, b ->
-                        if (i > 0) HorizontalDivider(color = Brand.Line, modifier = Modifier.padding(horizontal = 16.dp))
-                        HomeAppointmentRow(
-                            b, wide,
-                            onOpen = { go(Screen.PatientDetail(b.patientId)) },
-                            onStart = { go(Screen.VisitForm(b.patientId)) },
-                            onRemind = { openWhatsApp(context, b.phone, appointmentReminder(b, data.clinicName)) }
-                        )
-                    }
                 }
             }
         }
@@ -426,7 +413,7 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                 }
             }
 
-            // ───── Greeting ─────
+            // ───── Greeting and the light / dark button ─────
             Row(
                 Modifier.fillMaxWidth().padding(start = side, end = side, top = 22.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -440,9 +427,7 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                     Text(dateLine, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(12.dp))
-                Box {
-                    ThemeToggle()
-                }
+                ThemeToggle()
             }
 
             // ───── Content ─────
@@ -453,7 +438,6 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                 ) {
                     Column(Modifier.weight(1.3f)) {
                         spotlight()
-                        scheduleSection()
                         recallSection()
                     }
                     Column(Modifier.weight(1f)) {
@@ -469,7 +453,6 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                     metrics()
                     Spacer(Modifier.height(24.dp))
                     quickSection(4)
-                    scheduleSection()
                     recallSection()
                 }
             }
@@ -528,14 +511,15 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
 }
 
 // ───────────── Pieces of the home page ─────────────
+/** The dark patient card. Swipe it to see the next patient booked for the same day. */
 @Composable
 private fun SpotlightCard(
-    next: DayBooking?,
-    patient: Patient?,
-    onCall: () -> Unit,
-    onRemind: () -> Unit,
-    onPrimary: () -> Unit,
-    onOpen: () -> Unit,
+    queue: List<DayBooking>,
+    folks: Map<Long, Patient>,
+    onCall: (DayBooking) -> Unit,
+    onRemind: (DayBooking) -> Unit,
+    onPrimary: (DayBooking) -> Unit,
+    onOpen: (DayBooking) -> Unit,
     onBook: () -> Unit
 ) {
     val shape = RoundedCornerShape(28.dp)
@@ -552,57 +536,96 @@ private fun SpotlightCard(
                     radius = r, center = c
                 )
             }
-            .padding(20.dp)
+            .padding(vertical = 20.dp)
     ) {
-        if (next == null) {
-            SpotLabel("No patients booked", null)
-            Spacer(Modifier.height(10.dp))
-            Text("Your schedule is open", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-            Text("Book a patient's next visit in a few taps", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
-            Spacer(Modifier.height(16.dp))
-            GradientButton("Book appointment", Modifier.fillMaxWidth(), HomeIcons.CalendarAdd, height = 48.dp, onClick = onBook)
-        } else {
-            SpotLabel("Next patient · ${whenLabel(next)}", next.time.ifBlank { null })
-            Spacer(Modifier.height(14.dp))
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpen),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Avatar(next.name, 50.dp)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        next.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        next.reason.ifBlank { "Check-up" }, color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                }
+        if (queue.isEmpty()) {
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                SpotLabel("No patients booked", null)
+                Spacer(Modifier.height(10.dp))
+                Text("Your schedule is open", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                Text("Book a patient's next visit in a few taps", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
+                Spacer(Modifier.height(16.dp))
+                GradientButton("Book appointment", Modifier.fillMaxWidth(), HomeIcons.CalendarAdd, height = 48.dp, onClick = onBook)
             }
-            val balance = patient?.remaining ?: 0.0
-            val medical = patient?.alerts.orEmpty()
-            if (balance > 0.01 || medical.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (balance > 0.01) DarkChip("Balance ${rs(balance)}", Color(0xFFFFC94D), Color(0x33F5A800), null)
-                    if (medical.isNotEmpty()) {
-                        DarkChip(medical.take(2).joinToString(" · "), Color(0xFFFF9A9E), Color(0x33E5484D), Icons.Filled.Warning)
+        } else {
+            val pager = rememberPagerState(pageCount = { queue.size })
+            HorizontalPager(state = pager, pageSpacing = 8.dp, key = { queue[it].id }) { i ->
+                val b = queue[i]
+                val patient = folks[b.patientId]
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                    SpotLabel(
+                        (if (i == 0) "Next patient · " else "Coming up · ") + whenLabel(b),
+                        b.time.ifBlank { null }
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { onOpen(b) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Avatar(b.name, 50.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                b.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                b.reason.ifBlank { "Check-up" }, color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    val balance = patient?.remaining ?: 0.0
+                    val medical = patient?.alerts.orEmpty()
+                    Spacer(Modifier.height(12.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (balance > 0.01) {
+                            DarkChip("Balance ${rs(balance)}", Color(0xFFFFC94D), Color(0x33F5A800), null)
+                        } else {
+                            DarkChip("No dues", Color(0xFFB9E07E), Color(0x2E7CB518), Icons.Filled.Check)
+                        }
+                        if (medical.isNotEmpty()) {
+                            DarkChip(medical.take(2).joinToString(" · "), Color(0xFFFF9A9E), Color(0x33E5484D), Icons.Filled.Warning)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (b.phone.isNotBlank()) {
+                            GlassIcon(Icons.Filled.Call, "Call") { onCall(b) }
+                            Spacer(Modifier.width(8.dp))
+                            GlassIcon(AppIcons.Chat, "Send reminder") { onRemind(b) }
+                            Spacer(Modifier.width(10.dp))
+                        }
+                        GradientButton(
+                            if (b.day == todayEpochDay()) "Start visit" else "Open file",
+                            Modifier.weight(1f), height = 48.dp
+                        ) { onPrimary(b) }
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (next.phone.isNotBlank()) {
-                    GlassIcon(Icons.Filled.Call, "Call", onCall)
-                    Spacer(Modifier.width(8.dp))
-                    GlassIcon(AppIcons.Chat, "Send reminder", onRemind)
-                    Spacer(Modifier.width(10.dp))
-                }
-                GradientButton(
-                    if (next.day == todayEpochDay()) "Start visit" else "Open file",
-                    Modifier.weight(1f), height = 48.dp, onClick = onPrimary
+            if (queue.size > 1) {
+                Spacer(Modifier.height(14.dp))
+                PageDots(queue.size, pager.currentPage)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PageDots(count: Int, current: Int) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        if (count > 8) {
+            Text(
+                "${current + 1} of $count  ·  swipe for more", color = Color.White.copy(alpha = 0.75f),
+                fontSize = 12.sp, fontWeight = FontWeight.Medium
+            )
+        } else {
+            repeat(count) { i ->
+                val active = i == current
+                val w by animateDpAsState(if (active) 20.dp else 7.dp, label = "dot")
+                Box(
+                    Modifier.padding(horizontal = 3.dp).height(7.dp).width(w).clip(RoundedCornerShape(50))
+                        .background(if (active) Brand.Gold else Color.White.copy(alpha = 0.3f))
                 )
             }
         }
@@ -694,34 +717,6 @@ private fun QuickTile(label: String, icon: ImageVector, modifier: Modifier, onCl
         ) { Icon(icon, null, tint = Brand.GreenDeep, modifier = Modifier.size(26.dp)) }
         Spacer(Modifier.height(8.dp))
         Text(label, fontSize = 12.sp, color = Brand.Ink, textAlign = TextAlign.Center, lineHeight = 16.sp, maxLines = 2)
-    }
-}
-
-@Composable
-private fun HomeAppointmentRow(b: DayBooking, wide: Boolean, onOpen: () -> Unit, onStart: () -> Unit, onRemind: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            b.time.ifBlank { "Any time" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            color = Brand.GreenText, modifier = Modifier.width(70.dp)
-        )
-        Avatar(b.name, 40.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(b.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(b.reason.ifBlank { "Check-up" }, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (b.status == 1) {
-            Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
-        } else {
-            if (wide && b.phone.isNotBlank()) {
-                CircleIconButton(AppIcons.Chat, onRemind, bg = Brand.GreenSoft, tint = Brand.GreenDeep, size = 38.dp)
-                Spacer(Modifier.width(8.dp))
-            }
-            SoftButton("Start", null, height = 38.dp, onClick = onStart)
-        }
     }
 }
 
