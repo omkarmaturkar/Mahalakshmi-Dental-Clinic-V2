@@ -27,6 +27,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** Keeps only digits, at most 10. Old numbers like +919876543210 become 9876543210. */
+fun tenDigits(phone: String): String {
+    val digits = phone.filter { it.isDigit() }
+    return if (digits.length > 10) digits.takeLast(10) else digits
+}
+
 /** New patient (patientId = 0) or edit all details of an existing patient. */
 @Composable
 fun PatientEditScreen(
@@ -40,7 +46,7 @@ fun PatientEditScreen(
     val existing = remember { if (patientId != 0L) db.getPatient(patientId) else null }
     val everyone = remember { db.getPatients("") }
     var name by remember { mutableStateOf(existing?.name ?: "") }
-    var phone by remember { mutableStateOf(existing?.phone ?: "") }
+    var phone by remember { mutableStateOf(tenDigits(existing?.phone ?: "")) }
     var age by remember { mutableStateOf(existing?.age ?: "") }
     var gender by remember { mutableStateOf(existing?.gender ?: "") }
     var notes by remember { mutableStateOf(existing?.notes ?: "") }
@@ -48,18 +54,18 @@ fun PatientEditScreen(
     var otherAlert by remember { mutableStateOf("") }
     var more by remember { mutableStateOf(existing != null && existing.notes.isNotBlank()) }
     var askDelete by remember { mutableStateOf(false) }
+    val phoneOk = phone.isEmpty() || phone.length == 10
 
     // Warn if this mobile number is already registered for another patient
     val duplicate = remember(phone) {
-        val digits = phone.filter { it.isDigit() }.takeLast(10)
-        if (digits.length < 10) null
-        else everyone.firstOrNull { it.id != patientId && it.phone.filter { c -> c.isDigit() }.takeLast(10) == digits }
+        if (phone.length < 10) null
+        else everyone.firstOrNull { it.id != patientId && tenDigits(it.phone) == phone }
     }
 
     fun save() {
         val id = db.savePatient(
             Patient(
-                id = patientId, name = name.trim(), phone = phone.trim(), age = age.trim(), gender = gender,
+                id = patientId, name = name.trim(), phone = phone, age = age.trim(), gender = gender,
                 medical = medical.joinToString(", "), notes = notes.trim(),
                 createdAt = existing?.createdAt ?: System.currentTimeMillis()
             )
@@ -86,9 +92,15 @@ fun PatientEditScreen(
                     FormCard("Patient") {
                         AppField(name, { name = it }, "Full name *", icon = Icons.Filled.Person, caps = KeyboardCapitalization.Words)
                         AppField(
-                            phone, { phone = it.filter { c -> c.isDigit() || c == '+' } }, "Mobile number",
+                            phone, { phone = it.filter { c -> c.isDigit() }.take(10) }, "Mobile number (10 digits)",
                             icon = Icons.Filled.Phone, type = KeyboardType.Phone
                         )
+                        if (!phoneOk) {
+                            Text(
+                                "Mobile number must have 10 digits (${phone.length} entered)",
+                                fontSize = 12.sp, color = Brand.Red, fontWeight = FontWeight.Medium
+                            )
+                        }
                         duplicate?.let { d ->
                             Row(
                                 Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Brand.GoldSoft).padding(12.dp),
@@ -154,11 +166,12 @@ fun PatientEditScreen(
             }
             BottomActionBar {
                 val label = if (existing == null) "Save & open file" else "Save changes"
+                val canSave = name.isNotBlank() && phoneOk
                 if (wide) {
                     Spacer(Modifier.weight(1f))
-                    GradientButton(label, Modifier.width(340.dp), Icons.Filled.Check, enabled = name.isNotBlank()) { save() }
+                    GradientButton(label, Modifier.width(340.dp), Icons.Filled.Check, enabled = canSave) { save() }
                 } else {
-                    GradientButton(label, Modifier.weight(1f), Icons.Filled.Check, enabled = name.isNotBlank()) { save() }
+                    GradientButton(label, Modifier.weight(1f), Icons.Filled.Check, enabled = canSave) { save() }
                 }
             }
         }
