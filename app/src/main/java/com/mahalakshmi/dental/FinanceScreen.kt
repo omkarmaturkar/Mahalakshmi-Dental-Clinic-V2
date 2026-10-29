@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.mahalakshmi.dental
 
 import androidx.compose.foundation.background
@@ -7,7 +9,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,8 +25,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 data class PayRow(val id: Long, val patientId: Long, val name: String, val amount: Double, val date: Long, val mode: String)
 
@@ -54,6 +65,7 @@ fun ClinicDb.billedByDoctor(from: Long, to: Long): List<Pair<String, Double>> {
 }
 
 private val periodNames = listOf("Today", "This week", "This month", "Last month")
+private const val CUSTOM = 4
 
 private fun periodRange(period: Int): Pair<Long, Long> {
     val zone = ZoneId.systemDefault()
@@ -67,12 +79,38 @@ private fun periodRange(period: Int): Pair<Long, Long> {
     }
 }
 
+private fun dayStartMs(day: Long): Long =
+    LocalDate.ofEpochDay(day).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+private fun utcMs(day: Long): Long = LocalDate.ofEpochDay(day).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+
+private fun dayOfUtc(ms: Long): Long = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate().toEpochDay()
+
+/** "12 Oct 2026" for one day, "1 Oct – 15 Oct 2026" for a range. */
+private fun rangeLabel(from: Long, to: Long): String {
+    val short = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
+    val long = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault())
+    val a = LocalDate.ofEpochDay(from)
+    val b = LocalDate.ofEpochDay(to)
+    return when {
+        from == to -> a.format(long)
+        a.year == b.year -> "${a.format(short)} – ${b.format(long)}"
+        else -> "${a.format(long)} – ${b.format(long)}"
+    }
+}
+
 @Composable
 fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
     val version = DataBus.version
     var period by remember { mutableIntStateOf(2) }
+    var custom by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    var picking by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
-    val range = remember(period) { periodRange(period) }
+    val chosen = custom
+    val range = remember(period, chosen) {
+        if (period == CUSTOM && chosen != null) dayStartMs(chosen.first) to dayStartMs(chosen.second + 1) else periodRange(period)
+    }
+    val periodLabel = if (period == CUSTOM && chosen != null) rangeLabel(chosen.first, chosen.second) else periodNames[period.coerceAtMost(3)]
     val payments = remember(version, range) { runCatching { db.paymentsBetween(range.first, range.second) }.getOrElse { emptyList() } }
     val byDoctor = remember(version, range) { runCatching { db.billedByDoctor(range.first, range.second) }.getOrElse { emptyList() } }
     val dues = remember(version) { runCatching { db.getPatients("") }.getOrElse { emptyList() }.filter { it.remaining > 0.01 } }
@@ -90,7 +128,7 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
         val collectedCard: @Composable () -> Unit = {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(HomeColors.Teal).padding(22.dp)) {
                 Text(
-                    "COLLECTED · ${periodNames[period].uppercase()}", color = Color.White.copy(alpha = 0.75f),
+                    "COLLECTED · ${periodLabel.uppercase()}", color = Color.White.copy(alpha = 0.75f),
                     fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp
                 )
                 Spacer(Modifier.height(6.dp))
@@ -144,7 +182,7 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
             }
         }
         val listCard: @Composable () -> Unit = {
-            FormCard("Payments", periodNames[period]) {
+            FormCard("Payments", periodLabel) {
                 if (payments.isEmpty()) Text("No payments in this period", fontSize = 13.sp, color = Brand.Sub)
                 (if (showAll) payments else payments.take(15)).forEach { p ->
                     Row(
@@ -183,11 +221,18 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
         }
 
         Column(Modifier.fillMaxSize()) {
-            SectionTopBar("Finance", "Collections, dues and doctors")
+            SectionTopBar("Finance", "Collections, dues and doctors") {
+                CircleIconButton(HomeIcons.Calendar, { picking = true }, tint = Brand.GreenDeep)
+            }
             Row(
                 Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = side, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                if (chosen != null) {
+                    ChoiceChip(rangeLabel(chosen.first, chosen.second), period == CUSTOM) {
+                        if (period == CUSTOM) picking = true else period = CUSTOM
+                    }
+                }
                 periodNames.forEachIndexed { i, label -> ChoiceChip(label, period == i) { period = i } }
             }
             Column(
@@ -216,6 +261,43 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
                 }
             }
         }
+    }
+
+    if (picking) {
+        RangePickDialog(chosen, onDismiss = { picking = false }) { from, to ->
+            custom = from to to
+            period = CUSTOM
+            showAll = false
+            picking = false
+        }
+    }
+}
+
+/** Tap one date for a single day, or two dates for a range. */
+@Composable
+private fun RangePickDialog(initial: Pair<Long, Long>?, onDismiss: () -> Unit, onPick: (Long, Long) -> Unit) {
+    val state = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = initial?.let { utcMs(it.first) },
+        initialSelectedEndDateMillis = initial?.let { utcMs(it.second) }
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                enabled = state.selectedStartDateMillis != null,
+                onClick = {
+                    val start = state.selectedStartDateMillis
+                    if (start != null) {
+                        val from = dayOfUtc(start)
+                        val to = state.selectedEndDateMillis?.let { dayOfUtc(it) } ?: from
+                        onPick(minOf(from, to), maxOf(from, to))
+                    }
+                }
+            ) { Text("Show", color = Brand.GreenDeep, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Brand.Sub) } }
+    ) {
+        DateRangePicker(state = state, modifier = Modifier.weight(1f))
     }
 }
 
