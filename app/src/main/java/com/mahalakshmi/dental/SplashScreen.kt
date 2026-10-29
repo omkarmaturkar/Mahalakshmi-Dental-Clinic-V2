@@ -127,7 +127,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             ) {
                 Text(
                     "Mahalakshmi", fontWeight = FontWeight.Bold, fontSize = if (big) 42.sp else 32.sp,
-                    color = Brand.Charcoal, letterSpacing = spacing.value.sp
+                    color = Color(0xFF2A302E), letterSpacing = spacing.value.sp
                 )
                 Text(
                     "DENTAL CLINIC", fontWeight = FontWeight.SemiBold, fontSize = if (big) 16.sp else 13.sp,

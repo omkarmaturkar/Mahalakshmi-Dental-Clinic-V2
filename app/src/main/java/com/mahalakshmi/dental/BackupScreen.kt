@@ -240,7 +240,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
-                        Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(Color.White),
+                        Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(Brand.Surface),
                         contentAlignment = Alignment.Center
                     ) { Icon(AppIcons.Cloud, null, tint = Brand.GreenDeep, modifier = Modifier.size(30.dp)) }
                     Spacer(Modifier.width(16.dp))

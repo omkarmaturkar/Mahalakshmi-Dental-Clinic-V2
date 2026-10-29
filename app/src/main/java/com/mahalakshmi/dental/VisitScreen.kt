@@ -293,9 +293,9 @@ fun VisitFormScreen(db: ClinicDb, visitId: Long, patientId: Long, onBack: () -> 
                         )
                     }
                     if (f > 0 && p < f) {
-                        SoftButton("Mark fully paid", Icons.Filled.Check, bg = Color.White, height = 44.dp) { paid = fees }
+                        SoftButton("Mark fully paid", Icons.Filled.Check, bg = Brand.Surface, height = 44.dp) { paid = fees }
                     } else if (f > 0) {
-                        Pill("Fully paid", Color.White, Brand.GreenText, Icons.Filled.Check)
+                        Pill("Fully paid", Brand.Surface, Brand.GreenText, Icons.Filled.Check)
                     }
                 }
             }
@@ -494,7 +494,7 @@ private fun ToothArch(
             Box(
                 Modifier.offset(x = x.dp, y = y.dp).size(tooth)
                     .clip(CircleShape)
-                    .background(if (isSelected) BrandGradient else SolidColor(Color.White))
+                    .background(if (isSelected) BrandGradient else SolidColor(Brand.Surface))
                     .border(1.5.dp, if (isSelected) Brand.GreenDeep else Brand.Line, CircleShape)
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)

@@ -99,7 +99,7 @@ fun CrashReportScreen(report: String, onContinue: () -> Unit) {
         )
         Spacer(Modifier.height(14.dp))
         Box(
-            Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White).padding(12.dp)
+            Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brand.Surface).padding(12.dp)
         ) {
             SelectionContainer {
                 Text(

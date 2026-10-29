@@ -112,7 +112,7 @@ fun PatientEditScreen(
                                     "This number belongs to ${d.name}", fontSize = 13.sp, color = Brand.GoldDeep,
                                     fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)
                                 )
-                                SoftButton("Open", null, height = 36.dp, bg = Color.White, fg = Brand.GoldDeep) { onSaved(d.id, true) }
+                                SoftButton("Open", null, height = 36.dp, bg = Brand.Surface, fg = Brand.GoldDeep) { onSaved(d.id, true) }
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {

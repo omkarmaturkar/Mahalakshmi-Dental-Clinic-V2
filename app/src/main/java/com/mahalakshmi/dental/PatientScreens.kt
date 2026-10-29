@@ -55,9 +55,9 @@ val medicalOptions = listOf(
 )
 
 private val Purple = Color(0xFF7B4FD6)
-private val PurpleSoft = Color(0xFFF1EBFF)
+private val PurpleSoft get() = if (AppTheme.dark) Color(0xFF2B2442) else Color(0xFFF1EBFF)
 private val Blue = Color(0xFF2F6FED)
-private val BlueSoft = Color(0xFFE8F0FF)
+private val BlueSoft get() = if (AppTheme.dark) Color(0xFF1B2A45) else Color(0xFFE8F0FF)
 
 fun statusColor(status: Int): Color = when (status) {
     STATUS_PLANNED -> Brand.Red
@@ -603,7 +603,7 @@ private fun PatientHeader(
             }.padding(18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(66.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(66.dp).clip(CircleShape).background(Brand.Surface), contentAlignment = Alignment.Center) {
                 Avatar(p.name, 58.dp)
             }
             Spacer(Modifier.width(14.dp))
@@ -617,9 +617,9 @@ private fun PatientHeader(
             }
             if (p.phone.isNotBlank()) {
                 Spacer(Modifier.width(8.dp))
-                CircleIconButton(Icons.Filled.Call, onCall, bg = Color.White.copy(alpha = 0.16f), tint = Color.White, size = 42.dp)
+                CircleIconButton(Icons.Filled.Call, onCall, bg = Brand.Surface.copy(alpha = 0.16f), tint = Color.White, size = 42.dp)
                 Spacer(Modifier.width(8.dp))
-                CircleIconButton(AppIcons.Chat, onChat, bg = Color.White.copy(alpha = 0.16f), tint = Color.White, size = 42.dp)
+                CircleIconButton(AppIcons.Chat, onChat, bg = Brand.Surface.copy(alpha = 0.16f), tint = Color.White, size = 42.dp)
             }
         }
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -720,7 +720,7 @@ private fun TreatmentRow(t: Treatment, doctor: String, onOpen: () -> Unit, onSta
             Text(if (t.fee > 0) rs(t.fee) else "–", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Brand.Ink)
             Spacer(Modifier.height(4.dp))
             Box(Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onStatus)) {
-                Pill(statusLabel(t.status), Color.White, statusText(t.status))
+                Pill(statusLabel(t.status), Brand.Surface, statusText(t.status))
             }
         }
     }

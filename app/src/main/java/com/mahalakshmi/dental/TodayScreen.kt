@@ -58,13 +58,13 @@ import java.util.Locale
 // ───────────── Colours & icons of the home page ─────────────
 object HomeColors {
     val Teal = Color(0xFF588913)
-    val TealText = Color(0xFF5B8D14)
-    val TealSoft = Color(0xFFECF4E0)
-    val Amber = Color(0xFFB26A00)
-    val AmberSoft = Color(0xFFFDF0D9)
+    val TealText get() = if (AppTheme.dark) Color(0xFF9CCB5A) else Color(0xFF5B8D14)
+    val TealSoft get() = if (AppTheme.dark) Color(0xFF223019) else Color(0xFFECF4E0)
+    val Amber get() = if (AppTheme.dark) Color(0xFFF0B640) else Color(0xFFB26A00)
+    val AmberSoft get() = if (AppTheme.dark) Color(0xFF332914) else Color(0xFFFDF0D9)
     val Dot = Color(0xFFF5A524)
-    val Page = Color(0xFFF2F4F3)
-    val DueRed = Color(0xFFC62828)
+    val Page get() = if (AppTheme.dark) Color(0xFF0F1412) else Color(0xFFF2F4F3)
+    val DueRed get() = if (AppTheme.dark) Color(0xFFFF6B70) else Color(0xFFC62828)
 }
 
 private fun outlineIcon(name: String, vararg paths: String): ImageVector {
@@ -440,8 +440,8 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                     Text(dateLine, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(12.dp))
-                Box(Modifier.clip(CircleShape).clickable { go(Screen.ClinicSettings) }) {
-                    Avatar(data.doctorName.replace(Regex("^(?i)dr\\.?\\s+"), "").ifBlank { "Doctor" }, 54.dp, ring = true)
+                Box {
+                    ThemeToggle()
                 }
             }
 
@@ -689,7 +689,7 @@ private fun QuickTile(label: String, icon: ImageVector, modifier: Modifier, onCl
     ) {
         Box(
             Modifier.size(60.dp).shadow(4.dp, shape, ambientColor = Color(0x10000000), spotColor = Color(0x18000000))
-                .clip(shape).background(Color.White).border(1.dp, Brand.Line, shape),
+                .clip(shape).background(Brand.Surface).border(1.dp, Brand.Line, shape),
             contentAlignment = Alignment.Center
         ) { Icon(icon, null, tint = Brand.GreenDeep, modifier = Modifier.size(26.dp)) }
         Spacer(Modifier.height(8.dp))
@@ -730,7 +730,7 @@ private fun AlertsDialog(items: List<HomeAlert>, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(22.dp)
+                .background(Brand.Surface).padding(22.dp)
         ) {
             Text("Notifications", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Spacer(Modifier.height(10.dp))
@@ -775,7 +775,7 @@ fun PatientPickerDialog(db: ClinicDb, title: String, onDismiss: () -> Unit, onPi
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 620.dp)
-                .clip(RoundedCornerShape(28.dp)).background(Color.White).padding(20.dp)
+                .clip(RoundedCornerShape(28.dp)).background(Brand.Surface).padding(20.dp)
         ) {
             Text(title, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink)
             Text("Choose the patient", fontSize = 13.sp, color = Brand.Sub)
@@ -799,7 +799,7 @@ fun PatientPickerDialog(db: ClinicDb, title: String, onDismiss: () -> Unit, onPi
                 }
                 if (query.isNotEmpty()) {
                     Box(
-                        Modifier.size(28.dp).clip(CircleShape).background(Color.White).clickable { query = "" },
+                        Modifier.size(28.dp).clip(CircleShape).background(Brand.Surface).clickable { query = "" },
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Filled.Close, null, tint = Brand.Sub, modifier = Modifier.size(16.dp)) }
                 }

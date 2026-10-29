@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         db = ClinicDb(applicationContext)
+        AppTheme.load(applicationContext)
         val lastProblem = CrashGuard.read(this)
         setContent {
             ClinicTheme {
@@ -108,7 +109,7 @@ fun ClinicApp(db: ClinicDb) {
         if (target != null && target != Screen.Home) stack.add(target)
     }
     BackHandler(enabled = stack.size > 1) { back() }
-    StatusBarIcons(dark = true)
+    StatusBarIcons(dark = !AppTheme.dark)
 
     var message by remember { mutableStateOf<String?>(null) }
     var shownText by remember { mutableStateOf("") }
@@ -166,7 +167,7 @@ fun ClinicApp(db: ClinicDb) {
                     drawerState = drawer,
                     gesturesEnabled = drawer.isOpen,
                     drawerContent = {
-                        ModalDrawerSheet(drawerContainerColor = Color.White, modifier = Modifier.width(300.dp)) { menu() }
+                        ModalDrawerSheet(drawerContainerColor = Brand.Surface, modifier = Modifier.width(300.dp)) { menu() }
                     }
                 ) {
                     CompositionLocalProvider(LocalMenu provides { scope.launch { drawer.open() } }) {
@@ -203,6 +204,7 @@ private fun NavArea(entry: NavEntry, content: @Composable (Screen) -> Unit) {
                     (slideOutHorizontally(tween(300)) { it / 4 } + fadeOut(tween(200)))
             }
         },
+        contentKey = { e -> if (tabIndexOf(e.screen) >= 0) "tabs" else e },
         label = "navigation"
     ) { e ->
         Box(Modifier.fillMaxSize().background(Brand.Bg)) { content(e.screen) }
@@ -219,10 +221,10 @@ private fun ScreenHost(
     open: (Screen?) -> Unit
 ) {
     when (screen) {
-        is Screen.Home -> TodayScreen(db, go)
-        is Screen.Schedule -> ScheduleScreen(db, go)
-        is Screen.Finance -> FinanceScreen(db, go)
-        is Screen.Patients -> PatientsScreen(db, screen.filter, screen.focusSearch, go)
+        is Screen.Home -> TabPager(screen, db, go, open)
+        is Screen.Schedule -> TabPager(screen, db, go, open)
+        is Screen.Finance -> TabPager(screen, db, go, open)
+        is Screen.Patients -> TabPager(screen, db, go, open)
         is Screen.BackupPage -> BackupScreen(db, back) { open(null) }
         is Screen.ClinicSettings -> ClinicSettingsScreen(db, back)
         is Screen.PatientForm -> PatientEditScreen(

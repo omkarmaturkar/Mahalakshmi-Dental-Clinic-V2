@@ -568,7 +568,7 @@ fun Sidebar(
     val shown = remember(search, filter, everyone, todayIds) { filterPatients(everyone, search, filter, todayIds) }
     val dueCount = remember(everyone) { everyone.count { it.remaining > 0.0 } }
 
-    Column(Modifier.width(width).fillMaxHeight().background(Color.White).statusBarsPadding()) {
+    Column(Modifier.width(width).fillMaxHeight().background(Brand.Surface).statusBarsPadding()) {
         Box(Modifier.padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 18.dp)) { BrandRow() }
         Column(Modifier.padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             NavItem("Dashboard", Icons.Filled.Home, dashboardActive, onClick = onDashboard)

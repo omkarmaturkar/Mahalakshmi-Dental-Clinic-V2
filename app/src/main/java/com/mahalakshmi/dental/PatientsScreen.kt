@@ -120,7 +120,7 @@ fun PatientsScreen(db: ClinicDb, startFilter: Int, focusSearch: Boolean, go: (Sc
 private fun PatientSearchField(value: String, focus: FocusRequester, onChange: (String) -> Unit) {
     val shape = RoundedCornerShape(18.dp)
     Row(
-        Modifier.fillMaxWidth().height(52.dp).clip(shape).background(Color.White)
+        Modifier.fillMaxWidth().height(52.dp).clip(shape).background(Brand.Surface)
             .border(1.dp, Brand.Line, shape).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

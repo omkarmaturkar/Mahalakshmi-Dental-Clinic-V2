@@ -49,7 +49,7 @@ fun EditPaymentDialog(
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(26.dp)
+                .background(Brand.Surface).padding(26.dp)
         ) {
             Box(Modifier.size(56.dp).clip(CircleShape).background(BrandGradient), contentAlignment = Alignment.Center) {
                 Text("₹", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)

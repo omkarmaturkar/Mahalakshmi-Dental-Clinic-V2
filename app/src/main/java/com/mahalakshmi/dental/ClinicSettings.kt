@@ -386,7 +386,7 @@ private fun DoctorDialog(initial: Doctor, onDismiss: () -> Unit, onDelete: (() -
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp)).background(Color.White)
+                .clip(RoundedCornerShape(28.dp)).background(Brand.Surface)
                 .verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

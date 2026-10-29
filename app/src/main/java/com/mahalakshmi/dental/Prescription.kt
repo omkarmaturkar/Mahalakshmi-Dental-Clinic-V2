@@ -439,7 +439,7 @@ private fun MedicineRow(number: Int, m: Medicine, onEdit: () -> Unit, onRemove: 
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brand.Soft).clickable(onClick = onEdit).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(30.dp).clip(CircleShape).background(Color.White), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(30.dp).clip(CircleShape).background(Brand.Surface), contentAlignment = Alignment.Center) {
             Text("$number", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenDeep)
         }
         Spacer(Modifier.width(12.dp))
@@ -491,7 +491,7 @@ private fun MedicineDialog(initial: Medicine?, onDismiss: () -> Unit, onSave: (M
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp)).background(Color.White)
+                .clip(RoundedCornerShape(28.dp)).background(Brand.Surface)
                 .verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -543,7 +543,7 @@ private fun TemplateNameDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) 
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(26.dp)
+                .background(Brand.Surface).padding(26.dp)
         ) {
             Text("Save as template", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text("Use a short name, e.g. After extraction", fontSize = 13.sp, color = Brand.Sub)

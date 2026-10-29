@@ -59,7 +59,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
     }
 
     Column(
-        Modifier.fillMaxHeight().fillMaxWidth().background(Color.White)
+        Modifier.fillMaxHeight().fillMaxWidth().background(Brand.Surface)
             .then(if (permanent) Modifier.statusBarsPadding().navigationBarsPadding() else Modifier)
     ) {
         Row(
@@ -91,6 +91,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
                 trailing = if (dueTotal > 0) rs(dueTotal) else null, trailingColor = Brand.Red
             ) { onSelect(Screen.Patients(filter = 1)) }
             MenuHeading("Settings")
+            AppearanceRow()
             MenuItem("Clinic & doctors", DocIcons.Settings, active == "clinic") { onSelect(Screen.ClinicSettings) }
             MenuItem("Backup & restore", AppIcons.Cloud, active == "backup", dot = if (backupOk) null else Brand.Gold) {
                 onSelect(Screen.BackupPage)
@@ -181,7 +182,7 @@ fun BottomNavBar(current: String, onSelect: (Screen) -> Unit) {
         Row(
             Modifier.fillMaxWidth()
                 .shadow(16.dp, shape, ambientColor = Color(0x26000000), spotColor = Color(0x40000000))
-                .clip(shape).background(Brand.Charcoal).padding(6.dp),
+                .clip(shape).background(Brand.Night).padding(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             NavPill("Home", HomeIcons.Home, current == "home") { onSelect(Screen.Home) }

@@ -100,7 +100,7 @@ private fun StatusArch(
             val status = statusByTooth[label]
             Box(
                 Modifier.offset(x = x.dp, y = y.dp).size(tooth).clip(CircleShape)
-                    .background(if (status != null) statusSoft(status) else Color.White)
+                    .background(if (status != null) statusSoft(status) else Brand.Surface)
                     .border(1.5.dp, if (status != null) statusColor(status) else Brand.Line, CircleShape)
                     .clickable { onTooth(label) },
                 contentAlignment = Alignment.Center
@@ -177,7 +177,7 @@ fun TreatmentDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(16.dp).widthIn(max = 600.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp)).background(Color.White)
+                .clip(RoundedCornerShape(28.dp)).background(Brand.Surface)
                 .verticalScroll(rememberScrollState()).padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -287,7 +287,7 @@ fun ReceivePaymentDialog(balance: Double, onDismiss: () -> Unit, onSave: (Double
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(26.dp)
+                .background(Brand.Surface).padding(26.dp)
         ) {
             Box(Modifier.size(56.dp).clip(CircleShape).background(BrandGradient), contentAlignment = Alignment.Center) {
                 Text("₹", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
@@ -342,7 +342,7 @@ fun BookingDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth()
-                .clip(RoundedCornerShape(28.dp)).background(Color.White)
+                .clip(RoundedCornerShape(28.dp)).background(Brand.Surface)
                 .verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -384,7 +384,7 @@ fun NoteDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(26.dp)
+                .background(Brand.Surface).padding(26.dp)
         ) {
             Text("Add note", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text("For example: RCT sitting 2 – canals cleaned, temporary filling placed", fontSize = 13.sp, color = Brand.Sub)
@@ -408,7 +408,7 @@ fun PhotoOptionsDialog(photo: CasePhoto, onDismiss: () -> Unit, onKind: (String)
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
-                .background(Color.White).padding(24.dp)
+                .background(Brand.Surface).padding(24.dp)
         ) {
             PhotoImage(photo.path, Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(18.dp)))
             Spacer(Modifier.height(14.dp))
