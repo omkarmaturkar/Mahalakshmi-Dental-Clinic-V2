@@ -3,6 +3,8 @@ package com.mahalakshmi.dental
 import android.content.Context
 import android.text.Layout
 import java.io.File
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.math.abs
 
 // ───────────── Amount in words (Indian lakh / crore system) ─────────────
@@ -41,10 +43,29 @@ fun amountInWords(amount: Double): String {
     return "Rupees " + parts.joinToString(" ") + " Only"
 }
 
+private val inr2 = NumberFormat.getNumberInstance(Locale.forLanguageTag("en-IN")).apply {
+    minimumFractionDigits = 2
+    maximumFractionDigits = 2
+}
+
+/** Money with two decimals, e.g. ₹6,000.00 */
+fun rupees2(x: Double): String = "₹" + inr2.format(x)
+
 private fun treatmentText(t: Treatment, doctors: Map<Long, String>): String {
     val doctor = doctors[t.doctorId].orEmpty()
     return if (doctor.isBlank()) t.name else "${t.name}\n$doctor"
 }
+
+private fun patientRows(p: Patient) = listOf(
+    "Name" to p.name,
+    "Age / Sex" to listOf(if (p.age.isNotBlank()) "${p.age} yrs" else "", p.gender).filter { it.isNotBlank() }.joinToString(" / "),
+    "Mobile" to p.phone,
+    "Patient ID" to docNo("P-", p.id)
+)
+
+private fun consultantsOf(list: List<Treatment>, doctors: Map<Long, String>, db: ClinicDb): String =
+    list.mapNotNull { doctors[it.doctorId]?.takeIf { n -> n.isNotBlank() } }.distinct().joinToString(", ")
+        .ifBlank { db.mainDoctor()?.name.orEmpty() }
 
 // ───────────── Full bill ─────────────
 /** One bill for the whole account: every started or finished treatment, every payment, and the balance. */
@@ -56,94 +77,132 @@ fun invoicePdf(context: Context, db: ClinicDb, patientId: Long): File {
     val account = accountOf(all, payments)
     val doctors = db.doctorNames()
     val end = Layout.Alignment.ALIGN_OPPOSITE
-    val pdf = PdfBuilder(context, db.clinicInfo())
-    pdf.title("INVOICE", "Invoice No. ${docNo("INV-", patient.id)}\nDate: ${fmtDate(System.currentTimeMillis())}")
-    pdf.patientBox(patient)
-    pdf.row(
-        listOf(
-            PdfCell("#", 0.06f, 9.5f, PdfSub, 1),
-            PdfCell("Treatment", 0.42f, 9.5f, PdfSub, 1),
-            PdfCell("Tooth", 0.16f, 9.5f, PdfSub, 1),
-            PdfCell("Date", 0.18f, 9.5f, PdfSub, 1),
-            PdfCell("Amount", 0.18f, 9.5f, PdfSub, 1, end)
-        ),
-        fill = PdfSoft
-    )
-    if (billed.isEmpty()) pdf.text("No treatments yet.", 10f, PdfSub)
-    billed.forEachIndexed { i, t ->
-        pdf.row(
-            listOf(
-                PdfCell("${i + 1}", 0.06f, 10f, PdfSub),
-                PdfCell(treatmentText(t, doctors), 0.42f, 10f, PdfInk, 1),
-                PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.16f, 10f),
-                PdfCell(fmtDate(if (t.doneAt > 0L) t.doneAt else t.createdAt), 0.18f, 9.5f, PdfSub),
-                PdfCell(rs(t.fee), 0.18f, 10f, align = end)
-            ),
-            pad = 7f, line = true
-        )
+    val status = when {
+        account.balance > 0.01 -> "Balance due"
+        account.balance < -0.01 -> "Advance paid"
+        else -> "Paid in full"
     }
-    pdf.space(10f)
-    pdf.total("Total", rs(account.billed))
-    pdf.total("Paid", rs(account.paid), PdfGreen)
-    pdf.total(
-        if (account.balance >= 0) "Balance due" else "Advance paid", rs(abs(account.balance)),
-        if (account.balance > 0.01) PdfRed else PdfGreen, strong = true
-    )
-    if (account.billed > 0 && account.balance <= 0.01) pdf.stamp("PAID", PdfGreen)
-    pdf.space(8f)
-    pdf.text("Amount in words: ${amountInWords(account.billed)}", 9f, PdfSub, 1)
-    if (payments.isNotEmpty()) {
-        pdf.space(12f)
-        pdf.text("Payments received", 11f, PdfGreen, 2)
-        pdf.row(
-            listOf(
-                PdfCell("Date", 0.45f, 9.5f, PdfSub, 1),
-                PdfCell("Mode", 0.3f, 9.5f, PdfSub, 1),
-                PdfCell("Amount", 0.25f, 9.5f, PdfSub, 1, end)
-            ),
-            fill = PdfSoft
+    val pdf = PdfBuilder(context, db.clinicInfo())
+    pdf.title("INVOICE", "")
+    pdf.partyBox(
+        "PATIENT DETAILS", patientRows(patient),
+        "INVOICE DETAILS", listOf(
+            "Invoice No." to docNo("INV-", patient.id),
+            "Date" to fmtDate(System.currentTimeMillis()),
+            "Consultant" to consultantsOf(billed, doctors, db),
+            "Status" to status
         )
-        payments.forEach { p ->
-            pdf.row(
-                listOf(
-                    PdfCell(fmtDate(p.date), 0.45f, 10f),
-                    PdfCell(p.mode.ifBlank { "–" }, 0.3f, 10f, PdfSub),
-                    PdfCell(if (p.amount < 0) "– " + rs(-p.amount) else rs(p.amount), 0.25f, 10f, align = end)
-                ),
-                pad = 5f, line = true
+    )
+    val rows = if (billed.isEmpty()) {
+        listOf(
+            listOf(
+                PdfCell("–", 0.07f, 9.5f, PdfSub), PdfCell("No treatments yet", 0.43f, 9.5f, PdfSub),
+                PdfCell("–", 0.13f, 9.5f), PdfCell("–", 0.17f, 9f), PdfCell(rupees2(0.0), 0.2f, 9.5f, align = end)
+            )
+        )
+    } else {
+        billed.mapIndexed { i, t ->
+            listOf(
+                PdfCell("${i + 1}", 0.07f, 9.5f, PdfSub),
+                PdfCell(treatmentText(t, doctors), 0.43f, 9.5f, PdfInk, 1),
+                PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.13f, 9.5f),
+                PdfCell(fmtDate(if (t.doneAt > 0L) t.doneAt else t.createdAt), 0.17f, 9f, PdfSub),
+                PdfCell(rupees2(t.fee), 0.2f, 9.5f, align = end)
             )
         }
     }
+    pdf.table(
+        listOf(
+            PdfCell("Sr.", 0.07f, 9f, PdfSub, 1),
+            PdfCell("Treatment / Procedure", 0.43f, 9f, PdfSub, 1),
+            PdfCell("Tooth", 0.13f, 9f, PdfSub, 1),
+            PdfCell("Date", 0.17f, 9f, PdfSub, 1),
+            PdfCell("Amount", 0.2f, 9f, PdfSub, 1, end)
+        ),
+        rows
+    )
+    val modes = payments.map { it.mode }.filter { it.isNotBlank() }.distinct().joinToString(", ")
+    pdf.summary(
+        "AMOUNT IN WORDS", amountInWords(account.billed),
+        if (modes.isNotBlank()) "Payment mode: $modes" else "",
+        listOf(
+            SummaryLine("Total Amount", rupees2(account.billed)),
+            SummaryLine("Amount Paid", rupees2(account.paid), color = PdfGreen),
+            SummaryLine(
+                if (account.balance >= 0) "Balance Due" else "Advance Paid", rupees2(abs(account.balance)),
+                strong = true, color = if (account.balance > 0.01) PdfRed else PdfGreen
+            )
+        )
+    )
+    if (payments.isNotEmpty()) {
+        pdf.heading("Payment details")
+        pdf.table(
+            listOf(
+                PdfCell("Date", 0.3f, 9f, PdfSub, 1),
+                PdfCell("Receipt No.", 0.25f, 9f, PdfSub, 1),
+                PdfCell("Mode", 0.2f, 9f, PdfSub, 1),
+                PdfCell("Amount", 0.25f, 9f, PdfSub, 1, end)
+            ),
+            payments.map { p ->
+                listOf(
+                    PdfCell(fmtDate(p.date), 0.3f, 9.5f),
+                    PdfCell(docNo("R-", p.id), 0.25f, 9.5f),
+                    PdfCell(p.mode.ifBlank { "–" }, 0.2f, 9.5f),
+                    PdfCell(if (p.amount < 0) "– " + rupees2(-p.amount) else rupees2(p.amount), 0.25f, 9.5f, align = end)
+                )
+            }
+        )
+    }
+    pdf.notes(listOf("This is a computer-generated invoice.", "Please keep it for your records."))
     pdf.signature()
     return pdf.save(pdfFile(context, "Invoice", patient.name))
 }
 
 // ───────────── Payment receipt ─────────────
-/** Receipt for one payment, with the account balance after it. */
+/** Receipt for one payment, with the account position after it. */
 fun paymentReceiptPdf(context: Context, db: ClinicDb, paymentId: Long): File {
     val pay = db.getPaymentById(paymentId) ?: error("Payment not found")
     val patient = db.getPatient(pay.patientId) ?: error("Patient not found")
     val account = accountOf(db.treatmentsOf(pay.patientId), db.paymentsOf(pay.patientId))
+    val clinic = db.clinicInfo()
     val end = Layout.Alignment.ALIGN_OPPOSITE
-    val pdf = PdfBuilder(context, db.clinicInfo())
-    pdf.title("PAYMENT RECEIPT", "Receipt No. ${docNo("R-", pay.id)}\nDate: ${fmtDate(pay.date)}")
-    pdf.patientBox(patient)
-    pdf.row(
+    val pdf = PdfBuilder(context, clinic)
+    pdf.title("PAYMENT RECEIPT", "")
+    pdf.partyBox(
+        "PATIENT DETAILS", patientRows(patient),
+        "RECEIPT DETAILS", listOf(
+            "Receipt No." to docNo("R-", pay.id),
+            "Date" to fmtDate(pay.date),
+            "Payment mode" to pay.mode,
+            "Received by" to (db.mainDoctor()?.name ?: clinic.name)
+        )
+    )
+    pdf.table(
         listOf(
-            PdfCell("Amount received with thanks", 0.6f, 11f, PdfInk, 1),
-            PdfCell(rs(pay.amount), 0.4f, 16f, PdfGreen, 2, end)
+            PdfCell("Sr.", 0.08f, 9f, PdfSub, 1),
+            PdfCell("Description", 0.67f, 9f, PdfSub, 1),
+            PdfCell("Amount", 0.25f, 9f, PdfSub, 1, end)
         ),
-        fill = PdfSoft, pad = 12f, after = 8f
+        listOf(
+            listOf(
+                PdfCell("1", 0.08f, 9.5f, PdfSub),
+                PdfCell("Payment received towards dental treatment", 0.67f, 9.5f, PdfInk, 1),
+                PdfCell(rupees2(abs(pay.amount)), 0.25f, 9.5f, PdfInk, 2, end)
+            )
+        )
     )
-    pdf.text("Received: ${amountInWords(pay.amount)}", 9f, PdfSub, 1, after = 10f)
-    pdf.total("Payment mode", pay.mode.ifBlank { "–" })
-    pdf.total("Total treatment amount", rs(account.billed))
-    pdf.total("Total paid so far", rs(account.paid), PdfGreen)
-    pdf.total(
-        if (account.balance >= 0) "Balance due" else "Advance paid", rs(abs(account.balance)),
-        if (account.balance > 0.01) PdfRed else PdfGreen, strong = true
+    pdf.summary(
+        "AMOUNT RECEIVED IN WORDS", amountInWords(pay.amount), "",
+        listOf(
+            SummaryLine("Total treatment amount", rupees2(account.billed)),
+            SummaryLine("Total paid till date", rupees2(account.paid), color = PdfGreen),
+            SummaryLine(
+                if (account.balance >= 0) "Balance Due" else "Advance Paid", rupees2(abs(account.balance)),
+                strong = true, color = if (account.balance > 0.01) PdfRed else PdfGreen
+            )
+        )
     )
-    pdf.stamp(if (account.balance <= 0.01) "PAID" else "RECEIVED", PdfGreen)
+    pdf.notes(listOf("This is a computer-generated receipt."))
     pdf.signature()
     return pdf.save(pdfFile(context, "Receipt", patient.name))
 }
@@ -155,40 +214,54 @@ fun estimatePdf(context: Context, db: ClinicDb, patientId: Long): File {
     val planned = db.treatmentsOf(patientId).filter { it.status == STATUS_PLANNED }.sortedBy { it.createdAt }
     val doctors = db.doctorNames()
     val total = planned.sumOf { it.fee }
+    val now = System.currentTimeMillis()
     val end = Layout.Alignment.ALIGN_OPPOSITE
     val pdf = PdfBuilder(context, db.clinicInfo())
-    pdf.title("TREATMENT ESTIMATE", "Estimate No. ${docNo("EST-", patient.id)}\nDate: ${fmtDate(System.currentTimeMillis())}")
-    pdf.patientBox(patient)
-    pdf.row(
-        listOf(
-            PdfCell("#", 0.06f, 9.5f, PdfSub, 1),
-            PdfCell("Planned treatment", 0.52f, 9.5f, PdfSub, 1),
-            PdfCell("Tooth", 0.2f, 9.5f, PdfSub, 1),
-            PdfCell("Amount", 0.22f, 9.5f, PdfSub, 1, end)
-        ),
-        fill = PdfSoft
-    )
-    if (planned.isEmpty()) pdf.text("No planned treatments.", 10f, PdfSub)
-    planned.forEachIndexed { i, t ->
-        pdf.row(
-            listOf(
-                PdfCell("${i + 1}", 0.06f, 10f, PdfSub),
-                PdfCell(treatmentText(t, doctors), 0.52f, 10f, PdfInk, 1),
-                PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.2f, 10f),
-                PdfCell(rs(t.fee), 0.22f, 10f, align = end)
-            ),
-            pad = 7f, line = true
+    pdf.title("TREATMENT ESTIMATE", "")
+    pdf.partyBox(
+        "PATIENT DETAILS", patientRows(patient),
+        "ESTIMATE DETAILS", listOf(
+            "Estimate No." to docNo("EST-", patient.id),
+            "Date" to fmtDate(now),
+            "Valid till" to fmtDate(now + 30L * 24 * 60 * 60 * 1000),
+            "Consultant" to consultantsOf(planned, doctors, db)
         )
+    )
+    val rows = if (planned.isEmpty()) {
+        listOf(
+            listOf(
+                PdfCell("–", 0.07f, 9.5f, PdfSub), PdfCell("No planned treatments", 0.53f, 9.5f, PdfSub),
+                PdfCell("–", 0.18f, 9.5f), PdfCell(rupees2(0.0), 0.22f, 9.5f, align = end)
+            )
+        )
+    } else {
+        planned.mapIndexed { i, t ->
+            listOf(
+                PdfCell("${i + 1}", 0.07f, 9.5f, PdfSub),
+                PdfCell(treatmentText(t, doctors), 0.53f, 9.5f, PdfInk, 1),
+                PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.18f, 9.5f),
+                PdfCell(rupees2(t.fee), 0.22f, 9.5f, align = end)
+            )
+        }
     }
-    pdf.space(10f)
-    pdf.total("Estimated total", rs(total), strong = true)
-    pdf.stamp("ESTIMATE", PdfGold)
-    pdf.space(8f)
-    pdf.text("Amount in words: ${amountInWords(total)}", 9f, PdfSub, 1)
-    pdf.space(4f)
-    pdf.text(
-        "This is an estimate, valid for 30 days. The final amount may change if the treatment needed changes.",
-        9f, PdfSub
+    pdf.table(
+        listOf(
+            PdfCell("Sr.", 0.07f, 9f, PdfSub, 1),
+            PdfCell("Planned Treatment", 0.53f, 9f, PdfSub, 1),
+            PdfCell("Tooth", 0.18f, 9f, PdfSub, 1),
+            PdfCell("Amount", 0.22f, 9f, PdfSub, 1, end)
+        ),
+        rows
+    )
+    pdf.summary(
+        "ESTIMATED AMOUNT IN WORDS", amountInWords(total), "",
+        listOf(SummaryLine("Estimated Total", rupees2(total), strong = true, color = PdfGreen))
+    )
+    pdf.notes(
+        listOf(
+            "This is an estimate. The final amount may change if the treatment needed changes.",
+            "Valid for 30 days from the date above."
+        )
     )
     pdf.signature()
     return pdf.save(pdfFile(context, "Estimate", patient.name))
