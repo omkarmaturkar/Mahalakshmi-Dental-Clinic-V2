@@ -110,28 +110,60 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
             )
         }
         createExtraTables(db)
-        if (oldVersion < 4) moveVisitsIntoPatientFiles(db)
     }
 
-    // Version 4: every old visit becomes a treatment in the patient file. Nothing is deleted.
+    // Every time the database opens: make sure all tables exist, and convert old visits once.
+    // This repairs the database by itself, even after restoring an old backup.
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        if (db.isReadOnly) return
+        createPayments(db)
+        createExtraTables(db)
+        val moved = db.rawQuery("SELECT value FROM settings WHERE key = 'visits_moved'", null)
+            .use { c -> c.moveToFirst() && c.getString(0) == "1" }
+        if (!moved) {
+            try {
+                db.beginTransaction()
+                try {
+                    moveVisitsIntoPatientFiles(db)
+                    db.execSQL("INSERT OR REPLACE INTO settings (key, value) VALUES ('visits_moved', '1')")
+                    db.setTransactionSuccessful()
+                } finally {
+                    db.endTransaction()
+                }
+            } catch (e: Exception) {
+                // The app still opens; the problem is shown and can be sent next time
+                CrashGuard.save(context, e)
+            }
+        }
+    }
+
+    // Every old visit becomes a treatment in the patient file. Safe to run more than once: nothing is copied twice.
     private fun moveVisitsIntoPatientFiles(db: SQLiteDatabase) {
         db.execSQL(
             "INSERT INTO treatments (patient_id, name, teeth, fee, status, doctor_id, notes, created_at, done_at, legacy_visit) " +
                 "SELECT patient_id, CASE WHEN TRIM(IFNULL(reason, '')) = '' THEN 'Dental treatment' ELSE reason END, " +
                 "IFNULL(teeth, ''), IFNULL(fees, 0), 2, 0, IFNULL(problem, ''), date, date, id FROM visits " +
-                "WHERE TRIM(IFNULL(reason, '')) <> '' OR IFNULL(fees, 0) > 0"
+                "WHERE (TRIM(IFNULL(reason, '')) <> '' OR IFNULL(fees, 0) > 0) " +
+                "AND id NOT IN (SELECT legacy_visit FROM treatments WHERE legacy_visit > 0)"
         )
         db.execSQL(
             "INSERT INTO case_notes (patient_id, treatment_id, date, text) " +
-                "SELECT patient_id, 0, date, problem FROM visits " +
-                "WHERE TRIM(IFNULL(reason, '')) = '' AND IFNULL(fees, 0) = 0 AND TRIM(IFNULL(problem, '')) <> ''"
+                "SELECT v.patient_id, 0, v.date, v.problem FROM visits v " +
+                "WHERE TRIM(IFNULL(v.reason, '')) = '' AND IFNULL(v.fees, 0) = 0 AND TRIM(IFNULL(v.problem, '')) <> '' " +
+                "AND NOT EXISTS (SELECT 1 FROM case_notes n WHERE n.patient_id = v.patient_id AND n.date = v.date)"
         )
         db.execSQL(
             "INSERT INTO appointments (patient_id, day, time, reason, status, created_at) " +
-                "SELECT patient_id, next_visit, '', IFNULL(reason, ''), 0, date FROM visits v " +
-                "WHERE next_visit >= ? AND date = (SELECT MAX(date) FROM visits WHERE patient_id = v.patient_id)",
+                "SELECT v.patient_id, v.next_visit, '', IFNULL(v.reason, ''), 0, v.date FROM visits v " +
+                "WHERE v.next_visit >= ? AND v.date = (SELECT MAX(date) FROM visits WHERE patient_id = v.patient_id) " +
+                "AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a.patient_id = v.patient_id AND a.day = v.next_visit)",
             arrayOf<Any>(todayEpochDay() - 1)
         )
+        val existing = HashSet<String>()
+        db.rawQuery("SELECT file FROM case_photos", null).use { c ->
+            while (c.moveToNext()) c.getString(0)?.let { existing.add(it) }
+        }
         val photoRows = mutableListOf<ContentValues>()
         db.rawQuery(
             "SELECT v.patient_id, v.photos, v.date, IFNULL(t.id, 0) FROM visits v " +
@@ -141,6 +173,8 @@ class ClinicDb(private val context: Context) : SQLiteOpenHelper(context, NAME, n
             while (c.moveToNext()) {
                 val names = (c.getString(1) ?: "").split("\n").map { File(it).name }.filter { it.isNotBlank() }
                 for (name in names) {
+                    if (name in existing) continue
+                    existing.add(name)
                     val cv = ContentValues()
                     cv.put("patient_id", c.getLong(0))
                     cv.put("treatment_id", c.getLong(3))
