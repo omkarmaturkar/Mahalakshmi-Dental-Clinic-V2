@@ -256,7 +256,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                 Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (!driveOn) {
                         Text(
-                            "Connect once and your patients, payments and photos are copied to your Google Drive every day. " +
+                            "Connect once and your patients, payments and photos are copied to your Google Drive every time you close the app. " +
                                 "If you change your tablet, everything comes back with one tap.",
                             fontSize = 14.sp, color = Brand.Sub
                         )
@@ -273,7 +273,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                             }
                         }
                         HorizontalDivider(color = Brand.Line)
-                        ToggleRow("Automatic daily backup", "Runs once a day when you close the app", autoDaily) {
+                        ToggleRow("Automatic backup", "Every time you close the app (waits for internet if needed)", autoDaily) {
                             autoDaily = it
                             DriveBackup.setAuto(context, it)
                         }

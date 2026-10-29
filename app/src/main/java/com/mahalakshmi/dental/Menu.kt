@@ -92,6 +92,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
             ) { onSelect(Screen.Patients(filter = 1)) }
             MenuHeading("Settings")
             AppearanceRow()
+            AppLockRow()
             MenuItem("Clinic & doctors", DocIcons.Settings, active == "clinic") { onSelect(Screen.ClinicSettings) }
             MenuItem("Backup & restore", AppIcons.Cloud, active == "backup", dot = if (backupOk) null else Brand.Gold) {
                 onSelect(Screen.BackupPage)
