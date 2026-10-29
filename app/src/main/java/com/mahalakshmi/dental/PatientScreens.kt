@@ -20,7 +20,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.HorizontalDivider
@@ -115,7 +114,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
     var viewer by remember { mutableStateOf<Pair<List<String>, Int>?>(null) }
     var photoOptions by remember { mutableStateOf<CasePhoto?>(null) }
     var compare by remember { mutableStateOf(false) }
-    var deletePayment by remember { mutableStateOf<Payment?>(null) }
+    var editPayment by remember { mutableStateOf<Payment?>(null) }
     var tab by remember { mutableIntStateOf(0) }
     var photoKind by remember { mutableStateOf("Photo") }
     var savingPhoto by remember { mutableStateOf(false) }
@@ -233,7 +232,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                         }
                     }
                     Text(
-                        "Tap a status (To do / In progress / Done) to move it to the next step.",
+                        "Tap a treatment to change its fee or details. Tap its status to move it to the next step.",
                         fontSize = 11.sp, color = Brand.Faint, modifier = Modifier.padding(top = 8.dp)
                     )
                 }
@@ -277,8 +276,12 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     Spacer(Modifier.height(8.dp))
                     payments.forEachIndexed { i, p ->
                         if (i > 0) HorizontalDivider(color = Brand.Line)
-                        PaymentRow(p, onReceipt = { receiptFor = p.id }, onDelete = { deletePayment = p })
+                        PaymentRow(p, onEdit = { editPayment = p }, onReceipt = { receiptFor = p.id })
                     }
+                    Text(
+                        "Tap a payment to correct the amount, mode or date, or to delete it.",
+                        fontSize = 11.sp, color = Brand.Faint, modifier = Modifier.padding(top = 6.dp)
+                    )
                 }
             }
         }
@@ -443,7 +446,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
         }
     }
 
-    // ───── Dialogs ─────
+    // ───── Pop-ups ─────
     if (addTreatment || treatmentEdit != null) {
         TreatmentDialog(
             db = db,
@@ -471,6 +474,23 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
             DataBus.changed()
             notify("Payment of ${rs(amount)} received ✓")
             receiptFor = id
+        }
+    }
+    editPayment?.let { p ->
+        EditPaymentDialog(
+            p,
+            onDismiss = { editPayment = null },
+            onDelete = {
+                db.deletePayment(p.id)
+                editPayment = null
+                DataBus.changed()
+                notify("Payment deleted")
+            }
+        ) { amount, mode, date ->
+            db.updatePayment(p.id, amount, mode, date)
+            editPayment = null
+            DataBus.changed()
+            notify("Payment updated to ${rs(abs(amount))} ✓")
         }
     }
     receiptFor?.let { id ->
@@ -556,19 +576,6 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
         if (before != null && after != null) {
             BeforeAfterDialog(before, after, clinicName) { compare = false }
         }
-    }
-    deletePayment?.let { p ->
-        ConfirmDialog(
-            "Delete this payment?",
-            "${rs(p.amount)} received on ${fmtDate(p.date)} will be removed from the account.",
-            onConfirm = {
-                db.deletePayment(p.id)
-                deletePayment = null
-                DataBus.changed()
-                notify("Payment deleted")
-            },
-            onDismiss = { deletePayment = null }
-        )
     }
     if (savingPhoto) BusyDialog("Saving photo…")
 }
@@ -737,8 +744,11 @@ private fun MoneyBox(label: String, value: String, color: Color, modifier: Modif
 }
 
 @Composable
-private fun PaymentRow(p: Payment, onReceipt: () -> Unit, onDelete: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun PaymentRow(p: Payment, onEdit: () -> Unit, onReceipt: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onEdit).padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Column(Modifier.weight(1f)) {
             Text(
                 if (p.amount >= 0) rs(p.amount) else "– " + rs(-p.amount),
@@ -752,7 +762,7 @@ private fun PaymentRow(p: Payment, onReceipt: () -> Unit, onDelete: () -> Unit) 
         }
         CircleIconButton(DocIcons.Receipt, onReceipt, bg = Brand.Soft, tint = Brand.GreenDeep, size = 38.dp)
         Spacer(Modifier.width(8.dp))
-        CircleIconButton(Icons.Filled.Delete, onDelete, bg = Brand.Soft, tint = Brand.Faint, size = 38.dp)
+        CircleIconButton(Icons.Filled.Edit, onEdit, bg = Brand.Soft, tint = Brand.Sub, size = 38.dp)
     }
 }
 
