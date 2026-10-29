@@ -2,6 +2,15 @@ name: Build APK
 
 on:
   workflow_dispatch:
+    inputs:
+      trial_days:
+        description: "Trial days for a client (0 = full version)"
+        required: false
+        default: "0"
+      contact:
+        description: "Your name and mobile, shown when the trial ends"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -65,6 +74,44 @@ jobs:
               "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-$w.ttf"
           done
 
+      - name: Trial or full version
+        id: trial
+        env:
+          TRIAL_DAYS: ${{ inputs.trial_days }}
+          TRIAL_CONTACT: ${{ inputs.contact }}
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import os
+          import pathlib
+
+          raw = (os.environ.get("TRIAL_DAYS") or "0").strip()
+          days = int(raw) if raw.isdigit() else 0
+          contact = (os.environ.get("TRIAL_CONTACT") or "").strip()
+          safe = contact.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
+          ist = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+          now = datetime.datetime.now(ist)
+          if days > 0:
+              until = now + datetime.timedelta(days=days)
+              until_ms = int(until.timestamp() * 1000)
+              name = "Mahalakshmi-Dental-TRIAL-until-" + until.strftime("%d-%b-%Y")
+              print("TRIAL version: stops working on " + until.strftime("%d %b %Y, %I:%M %p"))
+          else:
+              until_ms = 0
+              name = "Mahalakshmi-Dental-APK"
+              print("FULL version: no time limit")
+          path = pathlib.Path("app/src/main/java/com/mahalakshmi/dental/TrialConfig.kt")
+          path.write_text(
+              "package com.mahalakshmi.dental\n\n"
+              "// Written by the Build APK workflow. 0 = full version.\n"
+              "const val TRIAL_UNTIL = %dL\n"
+              "const val TRIAL_CONTACT = \"%s\"\n" % (until_ms, safe),
+              encoding="utf-8"
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("name=%s\n" % name)
+          PY
+
       - name: Build the APK
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
@@ -74,5 +121,5 @@ jobs:
       - name: Upload the APK
         uses: actions/upload-artifact@v6
         with:
-          name: Mahalakshmi-Dental-APK
+          name: ${{ steps.trial.outputs.name }}
           path: app/build/outputs/apk/release/*.apk
