@@ -1,0 +1,69 @@
+name: Treatment sittings (one time)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add the tracker to the patient file
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          SRC = pathlib.Path("app/src/main/java/com/mahalakshmi/dental")
+          new = SRC / "Sittings.kt"
+          if not new.exists() or "fun TreatmentProgress" not in new.read_text(encoding="utf-8"):
+              print("Paste the new Sittings.kt first, then run this again.")
+              sys.exit(1)
+
+          p = SRC / "PatientScreens.kt"
+          t = p.read_text(encoding="utf-8")
+          if "TreatmentProgress(db, patientId)" in t:
+              print("The tracker is already in the patient file.")
+          else:
+              lines = t.split("\n")
+              hits = [i for i, l in enumerate(lines) if l.strip() == "treatmentsCard()"]
+              if len(hits) != 1 or t.count("0 -> treatmentsCard()") != 1:
+                  print("Could not find the right place in PatientScreens.kt (found %d)." % len(hits))
+                  sys.exit(1)
+              i = hits[0]
+              indent = lines[i][: len(lines[i]) - len(lines[i].lstrip())]
+              lines.insert(i, indent + "TreatmentProgress(db, patientId)")
+              t = "\n".join(lines)
+              t = t.replace("0 -> treatmentsCard()", "0 -> { TreatmentProgress(db, patientId); treatmentsCard() }")
+              p.write_text(t, encoding="utf-8")
+              print("Tracker added to the patient file")
+
+          gradle = pathlib.Path("app/build.gradle.kts")
+          g = gradle.read_text(encoding="utf-8")
+          code = int(re.search(r"versionCode\s*=\s*(\d+)", g).group(1)) + 1
+          g = re.sub(r"versionCode\s*=\s*\d+", "versionCode = %d" % code, g, count=1)
+          g = re.sub(r'versionName\s*=\s*"[^"]*"', 'versionName = "%d.0"' % code, g, count=1)
+          gradle.write_text(g, encoding="utf-8")
+          print("All done. Version is now %d.0" % code)
+          PY
+
+      - name: Save the change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Treatments in sittings"
+          git push
+
+      - name: Start the APK build
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run build.yml --ref "${{ github.ref_name }}"
