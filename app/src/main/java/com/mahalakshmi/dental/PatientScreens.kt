@@ -413,6 +413,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                         treatmentsCard()
                         MouthStatusCard(db, patientId)
                         PerioCard(db, patientId)
+                        EducationCard(db, patientId)
                     }
                     Column(
                         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
@@ -439,7 +440,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                         }
                     }
                     when (tab) {
-                        0 -> { TreatmentProgress(db, patientId); OrthoCard(db, patientId); treatmentsCard(); MouthStatusCard(db, patientId); PerioCard(db, patientId) }
+                        0 -> { TreatmentProgress(db, patientId); OrthoCard(db, patientId); treatmentsCard(); MouthStatusCard(db, patientId); PerioCard(db, patientId); EducationCard(db, patientId) }
                         1 -> moneyCard()
                         2 -> rxCard()
                         3 -> photosCard()
