@@ -236,6 +236,7 @@ fun ClinicDb.deletePerioExam(id: Long) {
 fun ClinicDb.newPerioExam(patientId: Long, last: PerioExam?): PerioExam {
     val missing = mutableSetOf<Int>()
     last?.teeth?.forEach { (n, t) -> if (t.missing) missing.add(n) }
+    runCatching { mouthStatusOf(patientId) }.getOrDefault(emptyList()).filter { it.missing }.forEach { missing.add(it.tooth) }
     treatmentsOf(patientId)
         .filter { it.status == STATUS_DONE && "extract" in it.name.lowercase() }
         .forEach { t -> t.teethList.forEach { s -> s.toString().toIntOrNull()?.let { missing.add(it) } } }
