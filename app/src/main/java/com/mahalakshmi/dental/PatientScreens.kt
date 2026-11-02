@@ -408,6 +408,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     ) {
                         header()
                         actions()
+                        TreatmentProgress(db, patientId)
                         treatmentsCard()
                     }
                     Column(
@@ -435,7 +436,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                         }
                     }
                     when (tab) {
-                        0 -> treatmentsCard()
+                        0 -> { TreatmentProgress(db, patientId); treatmentsCard() }
                         1 -> moneyCard()
                         2 -> rxCard()
                         3 -> photosCard()
