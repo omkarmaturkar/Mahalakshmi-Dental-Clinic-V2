@@ -56,8 +56,6 @@ fun sittingTemplate(name: String): List<String>? {
     return when {
         "root canal" in n || "rct" in n -> listOf("Opening the tooth", "Cleaning the canals", "Filling the canals", "Crown")
         "implant" in n -> listOf("Implant placement", "Healing check", "Abutment", "Crown")
-        "brace" in n || "ortho" in n || "aligner" in n ->
-            listOf("Braces fitting", "Adjustment 1", "Adjustment 2", "Adjustment 3", "Braces removal", "Retainer")
         "denture" in n -> listOf("Impressions", "Bite record", "Trial fitting", "Denture fitting")
         "crown" in n || "cap" in n || "bridge" in n -> listOf("Tooth preparation", "Crown fitting")
         else -> null
