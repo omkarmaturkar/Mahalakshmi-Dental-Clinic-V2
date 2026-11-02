@@ -145,7 +145,7 @@ private fun mouthSegOf(surface: Char, n: Int): MouthSeg = when (surface) {
 private fun mouthSurfaceAt(seg: MouthSeg, n: Int): Char = "MODBL".first { mouthSegOf(it, n) == seg }
 
 private fun mouthToggle(code: String, c: Char): String {
-    val set = code.toMutableSet()
+    val set = code.toSet().toMutableSet()
     if (!set.add(c)) set.remove(c)
     return "MODBL".filter { it in set }
 }
