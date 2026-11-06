@@ -107,7 +107,8 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
     var picking by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
     val chosen = custom
-    val range = remember(period, chosen) {
+    val today = todayEpochDay()
+    val range = remember(period, chosen, today) {
         if (period == CUSTOM && chosen != null) dayStartMs(chosen.first) to dayStartMs(chosen.second + 1) else periodRange(period)
     }
     val periodLabel = if (period == CUSTOM && chosen != null) rangeLabel(chosen.first, chosen.second) else periodNames[period.coerceAtMost(3)]

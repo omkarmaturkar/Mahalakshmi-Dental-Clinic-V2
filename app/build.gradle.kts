@@ -12,16 +12,16 @@ android {
         applicationId = "com.mahalakshmi.dental"
         minSdk = 26
         targetSdk = 35
-        versionCode = 29
-        versionName = "29.0"
+        versionCode = 30
+        versionName = "30.0"
     }
 
     signingConfigs {
         create("clinic") {
             storeFile = file("clinic.keystore")
-            storePassword = "mahalakshmi123"
+            storePassword = System.getenv("CLINIC_STORE_PASSWORD") ?: ""
             keyAlias = "clinic"
-            keyPassword = "mahalakshmi123"
+            keyPassword = System.getenv("CLINIC_KEY_PASSWORD") ?: ""
         }
     }
 

@@ -41,6 +41,7 @@ fun PatientsScreen(db: ClinicDb, startFilter: Int, focusSearch: Boolean, go: (Sc
     val version = DataBus.version
     val everyone = remember(version) { db.getPatients("") }
     val todayIds = remember(version) { db.upcoming(0).map { it.patientId }.toSet() }
+    val clinicName = remember(version) { db.clinicInfo().name }
     var search by remember { mutableStateOf("") }
     var filter by remember { mutableIntStateOf(startFilter) }
     val shown = remember(search, filter, everyone, todayIds) { filterPatients(everyone, search, filter, todayIds) }
@@ -98,7 +99,7 @@ fun PatientsScreen(db: ClinicDb, startFilter: Int, focusSearch: Boolean, go: (Sc
                     items(shown, key = { it.id }) { p ->
                         if (filter == 1) {
                             DueCard(p, onOpen = { go(Screen.PatientDetail(p.id)) }) {
-                                openWhatsApp(context, p.phone, reminderMessage(p, null))
+                                openWhatsApp(context, p.phone, reminderMessage(p, null, clinicName))
                             }
                         } else {
                             PatientCard(p) { go(Screen.PatientDetail(p.id)) }

@@ -180,7 +180,7 @@ fun PatientEditScreen(
     if (askDelete) {
         ConfirmDialog(
             "Delete ${existing?.name ?: "this patient"}?",
-            "All treatments, payments, prescriptions and photos of this patient will be permanently deleted.",
+            "All treatments, payments, prescriptions, photos, sittings, gum charts, mouth status and braces records of this patient will be permanently deleted.",
             onConfirm = {
                 askDelete = false
                 db.deletePatient(patientId)

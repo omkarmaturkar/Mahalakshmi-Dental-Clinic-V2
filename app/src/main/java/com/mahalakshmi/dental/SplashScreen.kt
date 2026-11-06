@@ -41,21 +41,21 @@ fun SplashScreen(onFinished: () -> Unit) {
     val tagAlpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
-        launch { logoAlpha.animateTo(1f, tween(550)) }
+        launch { logoAlpha.animateTo(1f, tween(450)) }
         launch { logoScale.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 160f)) }
-        delay(600)
-        launch { shine.animateTo(1f, tween(1000, easing = FastOutSlowInEasing)) }
-        launch { textAlpha.animateTo(1f, tween(650)) }
-        launch { textShift.animateTo(0f, tween(750, easing = FastOutSlowInEasing)) }
-        launch { spacing.animateTo(1f, tween(1000, easing = FastOutSlowInEasing)) }
-        delay(500)
-        launch {
-            glint.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
-            glint.animateTo(0f, tween(600))
-        }
         delay(250)
-        launch { tagAlpha.animateTo(1f, tween(600)) }
-        delay(1150)
+        launch { shine.animateTo(1f, tween(800, easing = FastOutSlowInEasing)) }
+        launch { textAlpha.animateTo(1f, tween(450)) }
+        launch { textShift.animateTo(0f, tween(550, easing = FastOutSlowInEasing)) }
+        launch { spacing.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+        delay(300)
+        launch {
+            glint.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+            glint.animateTo(0f, tween(400))
+        }
+        delay(150)
+        launch { tagAlpha.animateTo(1f, tween(350)) }
+        delay(400)
         onFinished()
     }
 

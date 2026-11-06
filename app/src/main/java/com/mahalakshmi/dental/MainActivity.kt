@@ -39,6 +39,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         db = ClinicDb(applicationContext)
+        // Removes records left behind by patients deleted earlier (runs in the background)
+        Thread { runCatching { db.removeLeftoverData() } }.start()
         AppTheme.load(applicationContext)
         AppLock.start(applicationContext)
         val lastProblem = CrashGuard.read(this)
@@ -140,6 +142,19 @@ fun ClinicApp(db: ClinicDb) {
         if (target != null && target != Screen.Home) stack.add(target)
     }
     BackHandler(enabled = stack.size > 1) { back() }
+
+    // A new day has started: refresh every screen, so a tablet left on overnight shows today's lists
+    LaunchedEffect(Unit) {
+        var day = todayEpochDay()
+        while (true) {
+            delay(30_000)
+            val now = todayEpochDay()
+            if (now != day) {
+                day = now
+                DataBus.changed()
+            }
+        }
+    }
     StatusBarIcons(dark = !AppTheme.dark)
 
     val daysLeft = remember(Trial.checks, DataBus.version) { Trial.daysLeft(context) }

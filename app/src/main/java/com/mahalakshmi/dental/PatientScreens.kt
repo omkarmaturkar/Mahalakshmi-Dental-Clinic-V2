@@ -54,10 +54,9 @@ val medicalOptions = listOf(
     "Asthma", "Thyroid", "Pregnant", "Blood Thinners"
 )
 
-private val Purple = Color(0xFF7B4FD6)
-private val PurpleSoft get() = if (AppTheme.dark) Color(0xFF2B2442) else Color(0xFFF1EBFF)
-private val Blue = Color(0xFF2F6FED)
-private val BlueSoft get() = if (AppTheme.dark) Color(0xFF1B2A45) else Color(0xFFE8F0FF)
+/** Calm grey for icons that are not about money or treatment status. */
+private val NeutralIcon: Color get() = Brand.Slate
+private val NeutralSoft: Color get() = Brand.Soft
 
 fun statusColor(status: Int): Color = when (status) {
     STATUS_PLANNED -> Brand.Red
@@ -177,7 +176,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
             PatientHeader(
                 patient, account, booking,
                 onCall = { callNumber(context, patient.phone) },
-                onChat = { openWhatsApp(context, patient.phone, reminderMessage(patient, booking?.day)) },
+                onChat = { openWhatsApp(context, patient.phone, reminderMessage(patient, booking?.day, clinicName)) },
                 onPay = { receive = true },
                 onBook = { bookingOpen = true }
             )
@@ -190,8 +189,8 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                         addTreatment = true
                     }
                     ActionTile("Payment", DocIcons.Receipt, Brand.GoldDeep, Brand.GoldSoft, Modifier.weight(1f)) { receive = true }
-                    ActionTile("Rx", DocIcons.Pill, Purple, PurpleSoft, Modifier.weight(1f)) { go(Screen.RxForm(patientId, 0)) }
-                    ActionTile("Bill", DocIcons.Pdf, Blue, BlueSoft, Modifier.weight(1f)) { pdf = "invoice" }
+                    ActionTile("Rx", DocIcons.Pill, NeutralIcon, NeutralSoft, Modifier.weight(1f)) { go(Screen.RxForm(patientId, 0)) }
+                    ActionTile("Bill", DocIcons.Pdf, NeutralIcon, NeutralSoft, Modifier.weight(1f)) { pdf = "invoice" }
                 }
             }
         }
@@ -233,7 +232,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     }
                     Text(
                         "Tap a treatment to change its fee or details. Tap its status to move it to the next step.",
-                        fontSize = 11.sp, color = Brand.Faint, modifier = Modifier.padding(top = 8.dp)
+                        fontSize = 12.sp, color = Brand.Sub, modifier = Modifier.padding(top = 8.dp)
                     )
                 }
                 if (account.planned > 0) {
@@ -280,7 +279,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     }
                     Text(
                         "Tap a payment to correct the amount, mode or date, or to delete it.",
-                        fontSize = 11.sp, color = Brand.Faint, modifier = Modifier.padding(top = 6.dp)
+                        fontSize = 12.sp, color = Brand.Sub, modifier = Modifier.padding(top = 6.dp)
                     )
                 }
             }
@@ -302,7 +301,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                                 .padding(vertical = 10.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconBadge(DocIcons.Pill, Purple, PurpleSoft, 38.dp)
+                            IconBadge(DocIcons.Pill, NeutralIcon, NeutralSoft, 38.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(fmtDate(rx.date), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Brand.Ink)
@@ -312,7 +311,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                                     fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            CircleIconButton(AppIcons.Chat, { rxShare = rx }, bg = Brand.Soft, tint = Brand.GreenDeep, size = 38.dp)
+                            CircleIconButton(AppIcons.Chat, { rxShare = rx }, bg = Brand.Soft, tint = Brand.GreenDeep, size = 44.dp)
                         }
                     }
                 }
@@ -364,7 +363,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     }
                     Text(
                         "Tap the label on a photo to change its type or delete it.",
-                        fontSize = 11.sp, color = Brand.Faint, modifier = Modifier.padding(top = 8.dp)
+                        fontSize = 12.sp, color = Brand.Sub, modifier = Modifier.padding(top = 8.dp)
                     )
                 }
             }
@@ -672,9 +671,9 @@ private fun PatientHeader(
 @Composable
 private fun InfoTile(label: String, value: String, color: Color, bg: Color, hint: String, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(bg).clickable(onClick = onClick).padding(12.dp)) {
-        Text(label, fontSize = 11.sp, color = Brand.Sub)
+        Text(label, fontSize = 12.sp, color = Brand.Sub)
         Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text(hint, fontSize = 11.sp, color = Brand.Faint)
+        Text(hint, fontSize = 12.sp, color = Brand.Sub)
     }
 }
 
@@ -765,9 +764,9 @@ private fun PaymentRow(p: Payment, onEdit: () -> Unit, onReceipt: () -> Unit) {
                 fontSize = 12.sp, color = Brand.Sub
             )
         }
-        CircleIconButton(DocIcons.Receipt, onReceipt, bg = Brand.Soft, tint = Brand.GreenDeep, size = 38.dp)
+        CircleIconButton(DocIcons.Receipt, onReceipt, bg = Brand.Soft, tint = Brand.GreenDeep, size = 44.dp)
         Spacer(Modifier.width(8.dp))
-        CircleIconButton(Icons.Filled.Edit, onEdit, bg = Brand.Soft, tint = Brand.Sub, size = 38.dp)
+        CircleIconButton(Icons.Filled.Edit, onEdit, bg = Brand.Soft, tint = Brand.Sub, size = 44.dp)
     }
 }
 
@@ -777,8 +776,8 @@ private fun HistoryRow(item: HistoryItem) {
         H_TREATMENT -> Triple(AppIcons.Tooth, Brand.GoldDeep, Brand.GoldSoft)
         H_DONE -> Triple(AppIcons.Tooth, Brand.GreenDeep, Brand.GreenSoft)
         H_PAYMENT -> Triple(DocIcons.Receipt, Brand.GreenDeep, Brand.GreenSoft)
-        H_RX -> Triple(DocIcons.Pill, Purple, PurpleSoft)
-        H_PHOTO -> Triple(AppIcons.Camera, Blue, BlueSoft)
+        H_RX -> Triple(DocIcons.Pill, NeutralIcon, NeutralSoft)
+        H_PHOTO -> Triple(AppIcons.Camera, NeutralIcon, NeutralSoft)
         else -> Triple(Icons.Filled.Edit, Brand.Sub, Brand.Soft)
     }
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
@@ -791,7 +790,7 @@ private fun HistoryRow(item: HistoryItem) {
             if (item.detail.isNotBlank()) Text(item.detail, fontSize = 12.sp, color = Brand.Sub)
         }
         Spacer(Modifier.width(8.dp))
-        Text(fmtDate(item.date), fontSize = 11.sp, color = Brand.Faint)
+        Text(fmtDate(item.date), fontSize = 12.sp, color = Brand.Sub)
     }
 }
 
@@ -823,15 +822,15 @@ fun openWhatsApp(context: Context, phone: String, message: String) {
     }
 }
 
-fun reminderMessage(p: Patient, nextVisit: Long?): String {
+fun reminderMessage(p: Patient, nextVisit: Long?, clinicName: String): String {
     val first = p.name.trim().substringBefore(" ")
     return when {
         p.remaining > 0 ->
-            "Hello $first, this is a gentle reminder from Mahalakshmi Dental Clinic. " +
+            "Hello $first, this is a gentle reminder from $clinicName. " +
                 "An amount of ${rs(p.remaining)} is pending for your dental treatment. Thank you! 🙏"
         nextVisit != null ->
-            "Hello $first, this is a reminder from Mahalakshmi Dental Clinic for your next dental visit on " +
+            "Hello $first, this is a reminder from $clinicName for your next dental visit on " +
                 "${fmtDayLong(nextVisit)}. See you soon! 😊"
-        else -> "Hello $first, greetings from Mahalakshmi Dental Clinic! 😊"
+        else -> "Hello $first, greetings from $clinicName! 😊"
     }
 }

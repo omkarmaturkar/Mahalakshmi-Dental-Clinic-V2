@@ -252,7 +252,10 @@ fun TreatmentProgress(db: ClinicDb, patientId: Long) {
     // ───── Pop-ups ─────
     finishing?.let { (t, s) ->
         val after = byTreatment[t.id].orEmpty().sortedBy { it.position }.firstOrNull { !it.done && it.id != s.id }
-        SittingDoneDialog(t, s, hasNext = after != null, onDismiss = { finishing = null }) { day, amount, mode, bookNext ->
+        SittingDoneDialog(
+            t, s, hasNext = after != null, alreadyPaid = payments[s.paymentId]?.amount ?: 0.0,
+            onDismiss = { finishing = null }
+        ) { day, amount, mode, bookNext ->
             val paymentId = db.markSittingDone(s, day, amount, mode)
             finishing = null
             DataBus.changed()
@@ -531,12 +534,14 @@ private fun SittingDoneDialog(
     t: Treatment,
     s: Sitting,
     hasNext: Boolean,
+    alreadyPaid: Double,
     onDismiss: () -> Unit,
     onSave: (day: Long, amount: Double, mode: String, bookNext: Boolean) -> Unit
 ) {
     val today = todayEpochDay()
     var day by remember { mutableLongStateOf(today) }
-    var amount by remember { mutableStateOf(numText(s.fee)) }
+    // Money already taken at this sitting (it was marked done before): don't suggest the fee again
+    var amount by remember { mutableStateOf(if (alreadyPaid > 0.0) "" else numText(s.fee)) }
     var mode by remember { mutableStateOf("Cash") }
     var bookNext by remember { mutableStateOf(hasNext) }
     var pickDate by remember { mutableStateOf(false) }
@@ -559,6 +564,9 @@ private fun SittingDoneDialog(
                 ChoiceChip(if (custom) fmtDay(day) else "Pick date", custom) { pickDate = true }
             }
             Text("Payment taken at this sitting (optional)", fontSize = 13.sp, color = Brand.Sub, fontWeight = FontWeight.Medium)
+            if (alreadyPaid > 0.0) {
+                Pill("${rs(alreadyPaid)} already received at this sitting", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
+            }
             AppField(
                 amount, { amount = it.filter { c -> c.isDigit() || c == '.' } }, "Amount",
                 type = KeyboardType.Decimal, prefix = "₹ "

@@ -43,7 +43,8 @@ fun ClinicDb.deleteVisitExtras(visitId: Long) {
     writableDatabase.delete("prescriptions", "visit_id = ?", arrayOf(visitId.toString()))
 }
 
-// Called when a patient is deleted: removes their treatments, notes, photos, appointments and prescriptions
+// Called when a patient is deleted: removes their treatments, notes, photos, appointments and prescriptions,
+// and their sittings, gum charts, mouth status and braces records
 fun ClinicDb.deletePatientExtras(patientId: Long) {
     val args = arrayOf(patientId.toString())
     val sql = writableDatabase
@@ -53,7 +54,64 @@ fun ClinicDb.deletePatientExtras(patientId: Long) {
             if (!name.isNullOrBlank()) photoFile(name).delete()
         }
     }
+    deleteFeatureData(patientId)
     listOf("prescriptions", "treatments", "case_notes", "case_photos", "appointments").forEach { table ->
         sql.delete(table, "patient_id = ?", args)
+    }
+}
+
+// ───────────── Tables of the clinical features ─────────────
+// Sittings, gum charts, mouth status and braces records create their own tables the first time they are used.
+
+private val FEATURE_TABLES = listOf("sittings", "perio_exams", "tooth_status", "ortho_visits", "ortho_cases")
+
+private fun tableHasColumn(sql: SQLiteDatabase, table: String, column: String): Boolean =
+    sql.rawQuery("PRAGMA table_info($table)", null).use { c ->
+        var found = false
+        while (c.moveToNext()) {
+            if (c.getString(1) == column) found = true
+        }
+        found
+    }
+
+/** Removes one patient's sittings, gum charts, mouth status and braces records. */
+fun ClinicDb.deleteFeatureData(patientId: Long) {
+    val sql = writableDatabase
+    val args = arrayOf(patientId.toString())
+    if (tableHasColumn(sql, "ortho_payments", "case_id") && tableHasColumn(sql, "ortho_cases", "patient_id")) {
+        sql.delete("ortho_payments", "case_id IN (SELECT id FROM ortho_cases WHERE patient_id = ?)", args)
+    }
+    FEATURE_TABLES.forEach { table ->
+        if (tableHasColumn(sql, table, "patient_id")) sql.delete(table, "patient_id = ?", args)
+    }
+}
+
+/**
+ * Removes feature records whose patient, treatment or braces case no longer exists
+ * (left behind by older versions of the app). Safe to run at any time.
+ */
+fun ClinicDb.removeLeftoverData() {
+    val sql = writableDatabase
+    sql.beginTransaction()
+    try {
+        FEATURE_TABLES.forEach { table ->
+            if (tableHasColumn(sql, table, "patient_id")) {
+                sql.delete(table, "patient_id NOT IN (SELECT id FROM patients)", null)
+            }
+        }
+        if (tableHasColumn(sql, "sittings", "treatment_id")) {
+            sql.delete("sittings", "treatment_id NOT IN (SELECT id FROM treatments)", null)
+        }
+        if (tableHasColumn(sql, "ortho_cases", "id")) {
+            if (tableHasColumn(sql, "ortho_visits", "case_id")) {
+                sql.delete("ortho_visits", "case_id NOT IN (SELECT id FROM ortho_cases)", null)
+            }
+            if (tableHasColumn(sql, "ortho_payments", "case_id")) {
+                sql.delete("ortho_payments", "case_id NOT IN (SELECT id FROM ortho_cases)", null)
+            }
+        }
+        sql.setTransactionSuccessful()
+    } finally {
+        sql.endTransaction()
     }
 }
