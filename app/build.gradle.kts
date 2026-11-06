@@ -12,8 +12,8 @@ android {
         applicationId = "com.mahalakshmi.dental"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "25.0"
+        versionCode = 26
+        versionName = "26.0"
     }
 
     signingConfigs {
