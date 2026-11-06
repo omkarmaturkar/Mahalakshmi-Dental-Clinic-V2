@@ -1,0 +1,67 @@
+name: Tool - Undo Heritage look
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  undo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find the last version before the new look
+        id: find
+        run: |
+          theme=app/src/main/java/com/mahalakshmi/dental/Theme.kt
+          start=""
+          for c in $(git rev-list --reverse --first-parent HEAD); do
+            if git cat-file -e "$c:.github/workflows/heritage-look.yml" 2>/dev/null; then start=$c; break; fi
+            if git cat-file -e "$c:app/src/main/res/font/jost_regular.ttf" 2>/dev/null; then start=$c; break; fi
+            if git show "$c:$theme" > /tmp/theme.kt 2>/dev/null && grep -q "DisplayFont" /tmp/theme.kt; then start=$c; break; fi
+          done
+          if [ -z "$start" ]; then echo "Could not find where the new look started"; exit 1; fi
+          base=$(git rev-parse "$start^")
+          echo "The new look started here:"
+          git log -1 --format='  %h  %ad  %s' --date=format:'%d %b %Y %H:%M' "$start"
+          echo "Going back to the version just before it:"
+          git log -1 --format='  %h  %ad  %s' --date=format:'%d %b %Y %H:%M' "$base"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Put the app back as it was
+        run: |
+          old=$(python3 -c "import re; print(re.search(r'versionCode\s*=?\s*(\d+)', open('app/build.gradle.kts').read()).group(1))")
+          git rm -r -q app
+          git checkout ${{ steps.find.outputs.base }} -- app
+          python3 - "$old" <<'PY'
+          import re, sys
+          p = "app/build.gradle.kts"
+          s = open(p).read()
+          was = re.search(r"versionCode\s*=?\s*(\d+)", s).group(1)
+          code = int(sys.argv[1]) + 1
+          s = re.sub(r"(versionCode\s*=?\s*)\d+", lambda m: m.group(1) + str(code), s, count=1)
+          s = re.sub(r'(versionName\s*=?\s*")[^"]*"', lambda m: m.group(1) + f'{code}.0"', s, count=1)
+          open(p, "w").write(s)
+          print(f"The app is back to how it was in version {was}.")
+          print(f"It gets number {code}, so it installs as an update and keeps your data.")
+          PY
+          git add -A
+          echo "Files put back:"
+          git status --short
+
+      - name: Save
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898315+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Undo Heritage look: back to the app as it was before"
+          git push
+
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main || echo "Please start Build APK yourself from the Actions page"
