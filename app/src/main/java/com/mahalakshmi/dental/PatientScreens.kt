@@ -10,7 +10,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -55,9 +54,10 @@ val medicalOptions = listOf(
     "Asthma", "Thyroid", "Pregnant", "Blood Thinners"
 )
 
-/** Calm graphite for icons that are not about money or treatment status. */
-private val NeutralTint: Color get() = Brand.Ink
-private val NeutralSoft: Color get() = Brand.Soft
+private val Purple = Color(0xFF7B4FD6)
+private val PurpleSoft get() = if (AppTheme.dark) Color(0xFF2B2442) else Color(0xFFF1EBFF)
+private val Blue = Color(0xFF2F6FED)
+private val BlueSoft get() = if (AppTheme.dark) Color(0xFF1B2A45) else Color(0xFFE8F0FF)
 
 fun statusColor(status: Int): Color = when (status) {
     STATUS_PLANNED -> Brand.Red
@@ -185,13 +185,13 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
         val actions: @Composable () -> Unit = {
             AppCard(Modifier.fillMaxWidth(), padding = 10.dp) {
                 Row(Modifier.fillMaxWidth()) {
-                    ActionTile("Treatment", Icons.Filled.Add, NeutralTint, NeutralSoft, Modifier.weight(1f)) {
+                    ActionTile("Treatment", Icons.Filled.Add, Brand.GreenDeep, Brand.GreenSoft, Modifier.weight(1f)) {
                         presetTooth = null
                         addTreatment = true
                     }
                     ActionTile("Payment", DocIcons.Receipt, Brand.GoldDeep, Brand.GoldSoft, Modifier.weight(1f)) { receive = true }
-                    ActionTile("Rx", DocIcons.Pill, NeutralTint, NeutralSoft, Modifier.weight(1f)) { go(Screen.RxForm(patientId, 0)) }
-                    ActionTile("Bill", DocIcons.Pdf, NeutralTint, NeutralSoft, Modifier.weight(1f)) { pdf = "invoice" }
+                    ActionTile("Rx", DocIcons.Pill, Purple, PurpleSoft, Modifier.weight(1f)) { go(Screen.RxForm(patientId, 0)) }
+                    ActionTile("Bill", DocIcons.Pdf, Blue, BlueSoft, Modifier.weight(1f)) { pdf = "invoice" }
                 }
             }
         }
@@ -250,15 +250,15 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                 Spacer(Modifier.height(14.dp))
                 Row {
                     MoneyBox("Billed", rs(account.billed), Brand.Ink, Modifier.weight(1f))
-                    MoneyBox("Paid", rs(account.paid), Brand.GreenText, Modifier.weight(1f))
+                    MoneyBox("Paid", rs(account.paid), Brand.GreenDeep, Modifier.weight(1f))
                     MoneyBox(
                         if (account.balance >= 0) "Balance" else "Advance", rs(abs(account.balance)),
-                        if (account.balance > 0) Brand.Red else Brand.GreenText, Modifier.weight(1f)
+                        if (account.balance > 0) Brand.Red else Brand.GreenDeep, Modifier.weight(1f)
                     )
                 }
                 Spacer(Modifier.height(12.dp))
                 val ratio = if (account.billed > 0) (account.paid / account.billed).toFloat().coerceIn(0f, 1f) else 0f
-                Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(Brand.Soft)) {
+                Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(Brand.Soft)) {
                     Box(Modifier.fillMaxWidth(ratio).fillMaxHeight().clip(RoundedCornerShape(50)).background(BrandGradient))
                 }
                 Spacer(Modifier.height(14.dp))
@@ -302,7 +302,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                                 .padding(vertical = 10.dp, horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconBadge(DocIcons.Pill, NeutralTint, NeutralSoft, 38.dp)
+                            IconBadge(DocIcons.Pill, Purple, PurpleSoft, 38.dp)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(fmtDate(rx.date), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Brand.Ink)
@@ -312,7 +312,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                                     fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            CircleIconButton(AppIcons.Chat, { rxShare = rx }, bg = Brand.Soft, tint = Brand.Ink, size = 38.dp)
+                            CircleIconButton(AppIcons.Chat, { rxShare = rx }, bg = Brand.Soft, tint = Brand.GreenDeep, size = 38.dp)
                         }
                     }
                 }
@@ -383,7 +383,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     if (history.size > 25) {
                         Text(
                             if (showAllHistory) "Show less" else "Show all ${history.size}",
-                            fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GoldDeep,
+                            fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GreenDeep,
                             modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { showAllHistory = !showAllHistory }
                                 .padding(vertical = 6.dp, horizontal = 4.dp)
                         )
@@ -394,7 +394,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
 
         Column(Modifier.fillMaxSize()) {
             AppTopBar(patient.name, "Patient file", onBack) {
-                CircleIconButton(Icons.Filled.Edit, { go(Screen.PatientForm(patientId)) }, tint = Brand.Ink)
+                CircleIconButton(Icons.Filled.Edit, { go(Screen.PatientForm(patientId)) }, tint = Brand.GreenDeep)
             }
             if (wide) {
                 Row(
@@ -586,7 +586,6 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
 }
 
 // ───────────── Pieces of the patient file ─────────────
-/** Rich graphite band with the patient's name in the serif font, then alerts, balance and next visit. */
 @Composable
 private fun PatientHeader(
     p: Patient,
@@ -601,7 +600,7 @@ private fun PatientHeader(
         Row(
             Modifier.fillMaxWidth().background(CharcoalGradient).drawBehind {
                 val c = Offset(size.width * 0.95f, 0f)
-                val r = size.width * 0.6f
+                val r = size.width * 0.55f
                 drawCircle(
                     Brush.radialGradient(listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent), center = c, radius = r),
                     radius = r, center = c
@@ -609,26 +608,23 @@ private fun PatientHeader(
             }.padding(18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(66.dp).clip(CircleShape).background(Brand.Cloud), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(66.dp).clip(CircleShape).background(Brand.Surface), contentAlignment = Alignment.Center) {
                 Avatar(p.name, 58.dp)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    p.name, color = Brand.Cloud, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold,
-                    fontSize = 26.sp, lineHeight = 28.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
-                )
+                Text(p.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 21.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val since = SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(Date(p.createdAt))
                 val info = listOf(p.gender, if (p.age.isNotBlank()) "${p.age} yrs" else "", "Since $since")
                     .filter { it.isNotBlank() }.joinToString("  ·  ")
-                Text(info, color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
-                if (p.phone.isNotBlank()) Text(p.phone, color = Brand.Sun, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(info, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+                if (p.phone.isNotBlank()) Text(p.phone, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
             if (p.phone.isNotBlank()) {
                 Spacer(Modifier.width(8.dp))
-                HeaderButton(Icons.Filled.Call, "Call", onCall)
+                CircleIconButton(Icons.Filled.Call, onCall, bg = Brand.Surface.copy(alpha = 0.16f), tint = Color.White, size = 42.dp)
                 Spacer(Modifier.width(8.dp))
-                HeaderButton(AppIcons.Chat, "WhatsApp", onChat)
+                CircleIconButton(AppIcons.Chat, onChat, bg = Brand.Surface.copy(alpha = 0.16f), tint = Color.White, size = 42.dp)
             }
         }
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -653,7 +649,7 @@ private fun PatientHeader(
                         else -> "Advance"
                     },
                     value = if (settled) "All paid ✓" else rs(abs(due)),
-                    color = if (due > 0.01) Brand.Red else Brand.GreenText,
+                    color = if (due > 0.01) Brand.Red else Brand.GreenDeep,
                     bg = if (due > 0.01) Brand.RedSoft else Brand.GreenSoft,
                     hint = if (due > 0.01) "Tap to receive" else "Tap to add a payment",
                     modifier = Modifier.weight(1f),
@@ -674,22 +670,10 @@ private fun PatientHeader(
 }
 
 @Composable
-private fun HeaderButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.10f))
-            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) { Icon(icon, label, tint = Brand.Cloud, modifier = Modifier.size(20.dp)) }
-}
-
-@Composable
 private fun InfoTile(label: String, value: String, color: Color, bg: Color, hint: String, modifier: Modifier, onClick: () -> Unit) {
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(bg).clickable(onClick = onClick).padding(12.dp)) {
-        Text(label, fontSize = 11.sp, color = Brand.Sub, letterSpacing = 0.8.sp)
-        Text(
-            value, fontFamily = DisplayFont, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = color,
-            maxLines = 2, overflow = TextOverflow.Ellipsis
-        )
+        Text(label, fontSize = 11.sp, color = Brand.Sub)
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Text(hint, fontSize = 11.sp, color = Brand.Faint)
     }
 }
@@ -700,8 +684,8 @@ private fun ActionTile(label: String, icon: ImageVector, tint: Color, soft: Colo
         modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 10.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.size(48.dp).clip(CircleShape).background(soft), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(23.dp))
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(soft), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Brand.Ink, maxLines = 1)
@@ -738,10 +722,7 @@ private fun TreatmentRow(t: Treatment, doctor: String, onOpen: () -> Unit, onSta
         }
         Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
-            Text(
-                if (t.fee > 0) rs(t.fee) else "–", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold,
-                fontSize = 17.sp, color = Brand.Ink
-            )
+            Text(if (t.fee > 0) rs(t.fee) else "–", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Brand.Ink)
             Spacer(Modifier.height(4.dp))
             Box(Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onStatus)) {
                 Pill(statusLabel(t.status), Brand.Surface, statusText(t.status))
@@ -762,11 +743,8 @@ private fun LegendDot(status: Int) {
 @Composable
 private fun MoneyBox(label: String, value: String, color: Color, modifier: Modifier) {
     Column(modifier) {
-        Text(label, fontSize = 11.sp, color = Brand.Sub, letterSpacing = 0.8.sp)
-        Text(
-            value, fontFamily = DisplayFont, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = color,
-            maxLines = 1, overflow = TextOverflow.Ellipsis
-        )
+        Text(label, fontSize = 12.sp, color = Brand.Sub)
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -778,16 +756,16 @@ private fun PaymentRow(p: Payment, onEdit: () -> Unit, onReceipt: () -> Unit) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                if (p.amount >= 0) "+ " + rs(p.amount) else "– " + rs(-p.amount),
-                fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
-                color = if (p.amount >= 0) Brand.GreenText else Brand.Red
+                if (p.amount >= 0) rs(p.amount) else "– " + rs(-p.amount),
+                fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                color = if (p.amount >= 0) Brand.GreenDeep else Brand.Red
             )
             Text(
                 listOf(fmtDateTime(p.date), p.mode).filter { it.isNotBlank() }.joinToString("  ·  "),
                 fontSize = 12.sp, color = Brand.Sub
             )
         }
-        CircleIconButton(DocIcons.Receipt, onReceipt, bg = Brand.Soft, tint = Brand.Ink, size = 38.dp)
+        CircleIconButton(DocIcons.Receipt, onReceipt, bg = Brand.Soft, tint = Brand.GreenDeep, size = 38.dp)
         Spacer(Modifier.width(8.dp))
         CircleIconButton(Icons.Filled.Edit, onEdit, bg = Brand.Soft, tint = Brand.Sub, size = 38.dp)
     }
@@ -797,10 +775,10 @@ private fun PaymentRow(p: Payment, onEdit: () -> Unit, onReceipt: () -> Unit) {
 private fun HistoryRow(item: HistoryItem) {
     val (icon, tint, bg) = when (item.kind) {
         H_TREATMENT -> Triple(AppIcons.Tooth, Brand.GoldDeep, Brand.GoldSoft)
-        H_DONE -> Triple(AppIcons.Tooth, Brand.GreenText, Brand.GreenSoft)
-        H_PAYMENT -> Triple(DocIcons.Receipt, Brand.GreenText, Brand.GreenSoft)
-        H_RX -> Triple(DocIcons.Pill, NeutralTint, NeutralSoft)
-        H_PHOTO -> Triple(AppIcons.Camera, NeutralTint, NeutralSoft)
+        H_DONE -> Triple(AppIcons.Tooth, Brand.GreenDeep, Brand.GreenSoft)
+        H_PAYMENT -> Triple(DocIcons.Receipt, Brand.GreenDeep, Brand.GreenSoft)
+        H_RX -> Triple(DocIcons.Pill, Purple, PurpleSoft)
+        H_PHOTO -> Triple(AppIcons.Camera, Blue, BlueSoft)
         else -> Triple(Icons.Filled.Edit, Brand.Sub, Brand.Soft)
     }
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
