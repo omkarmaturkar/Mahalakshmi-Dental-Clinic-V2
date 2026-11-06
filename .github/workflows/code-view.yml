@@ -1,0 +1,45 @@
+name: Tool - Code view for Claude (text copies)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make text copies and a colour report
+        run: |
+          rm -rf code-view
+          mkdir -p code-view
+          for f in app/src/main/java/com/mahalakshmi/dental/*.kt; do
+            cp "$f" "code-view/$(basename "$f").txt"
+          done
+          python3 - <<'PY'
+          import re, pathlib
+          pat = re.compile(r"Color\(0x|Brand\.(Green|Gold|Charcoal|Night|Glass|Red)|HomeColors|CharcoalGradient|BrandGradient|radialGradient|Purple|Blue|FontWeight\.Bold|Poppins|Color\.White|background\(")
+          out = []
+          for f in sorted(pathlib.Path("app/src/main/java/com/mahalakshmi/dental").glob("*.kt")):
+              lines = f.read_text(encoding="utf-8").splitlines()
+              hits = [i for i, l in enumerate(lines) if pat.search(l)]
+              out.append(f"===== {f.name}  ({len(lines)} lines, {len(hits)} matches)")
+              for i in hits:
+                  out.append(f"{i + 1}: {lines[i].strip()}")
+          pathlib.Path("code-view/REPORT.txt").write_text("\n".join(out), encoding="utf-8")
+          print("Report lines:", len(out))
+          PY
+          ls code-view
+
+      - name: Save and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898315+github-actions[bot]@users.noreply.github.com"
+          git add code-view
+          git commit -m "Text copies of the code for review" || echo "Nothing new to save"
+          git push
+          git tag -f "code-view-${{ github.run_number }}"
+          git push -f origin "code-view-${{ github.run_number }}"
