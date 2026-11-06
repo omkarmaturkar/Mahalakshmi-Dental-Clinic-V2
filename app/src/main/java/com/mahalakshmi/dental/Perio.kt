@@ -258,7 +258,7 @@ fun PerioCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Gum health", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
+                Text("Gum health", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
                 Text(
                     if (latest == null) "No gum check-up yet" else "Last check-up ${fmtDate(latest.date)}",
                     fontSize = 12.sp, color = Brand.Sub

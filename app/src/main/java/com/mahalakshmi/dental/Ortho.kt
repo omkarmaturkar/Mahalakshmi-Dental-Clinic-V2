@@ -389,7 +389,7 @@ fun OrthoCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), onClick = { open = true }, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Braces case", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
+                Text("Braces case", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
                 val sub = listOf(case.appliance, case.bite, case.extraction).filter { it.isNotBlank() }.joinToString(" · ")
                 Text(
                     sub.ifBlank { "Tap to fill in the diagnosis and plan" },
@@ -588,7 +588,7 @@ private fun OrthoSheet(db: ClinicDb, patientId: Long, startWithVisit: Boolean, o
                 AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(current.appliance.ifBlank { "Braces" }, fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
+                            Text(current.appliance.ifBlank { "Braces" }, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
                             Text(
                                 "Started ${fmtDate(current.startDate)} · tap to change", fontSize = 12.sp, color = Brand.Sub,
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { pickStart = true }

@@ -800,7 +800,7 @@ fun EducationCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), onClick = { open = true }, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Explain to patient", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
+                Text("Explain to patient", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
                 Text("Pictures and simple words · English, हिंदी, मराठी", fontSize = 12.sp, color = Brand.Sub)
             }
             Spacer(Modifier.width(8.dp))
@@ -934,7 +934,7 @@ private fun EduTopicPanel(topic: EduTopic, lang: Int, patientName: String, phone
 
     AppCard(Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(topic.title(lang), fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink, modifier = Modifier.weight(1f))
+            Text(topic.title(lang), fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink, modifier = Modifier.weight(1f))
             Text("Step ${page + 1} of ${topic.steps.size}", fontSize = 12.sp, color = Brand.Sub)
         }
         Spacer(Modifier.height(10.dp))
