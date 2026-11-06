@@ -1,7 +1,7 @@
 # Mahalakshmi Dental Clinic App – Project Notes
 
 > Paste this whole file at the start of any new chat with Claude so it knows the project.
-> Last updated: 2 Nov 2026 · Version 24.0
+> Last updated: 6 Nov 2026 · App code: version 24.0 (the Heritage redesign was tried and undone)
 
 ---
 
@@ -11,7 +11,7 @@
 |---|---|
 | Repo (private) | https://github.com/omkarmaturkar/Mahalakshmi-Dental-Clinic-V2 |
 | Package | `com.mahalakshmi.dental` |
-| Version | 24.0 (versionCode 24) |
+| Version | Code of 24.0. The versionCode was raised above the redesign builds when the redesign was undone (exact number in `app/build.gradle.kts`) |
 | Tech | Kotlin 2.0.21 · Jetpack Compose · AGP 8.7.3 · Gradle 8.11.1 · minSdk 26 · target/compile 35 |
 | Extra libraries | androidx.biometric 1.1.0 · fragment-ktx 1.8.5 · work-runtime-ktx 2.9.1 · play-services-auth 21.2.0 |
 | Database | Plain SQLite (`ClinicDb` extends `SQLiteOpenHelper`, DB version 4). No Room. |
@@ -30,7 +30,10 @@
 - One-time tools in `.github/workflows/` have all been run already. **Do not run them again.**
   - Older tools: recolor, darkmode, teeth, security.
   - New tools: sittings, perio, surfaces, braces, education. Each one inserted a card into `PatientScreens.kt`, raised the version and started a build.
+  - Redesign tools from Nov 2026 (heritage-look, code-view, heritage-finish, fix-fonts, undo-heritage) belonged to the Heritage redesign, which was undone. Delete any that are still there and never run them.
 - **Finding build errors:** open the failed run → job **build** → step **Build the APK** → search `e: file:///`. Each line gives the file, the line number and the problem.
+- **Private repo limits:** GitHub Free gives 2,000 build minutes a month for private repos, and APK downloads count towards 500 MB of storage. If a build fails because storage is full, delete the downloads of old runs.
+- **Undoing a change:** a one-time tool puts the `app` folder back from git history, but raises versionCode above the installed build. An APK with a lower versionCode can't be installed over the app without uninstalling, and uninstalling erases the data.
 
 ## 4. Files
 
@@ -130,6 +133,8 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 - Brand colours are getters that switch with dark mode: Ink, Sub, Faint, Line, Soft, Surface (white / dark card), Night, GreenDeep, GreenText, GreenSoft, GreenLine, Gold, GoldDeep, GoldSoft, Red, RedSoft. Use `Brand.Surface` instead of `Color.White`.
 - The owner prefers **design A: clean, light cards that are easy to read**. Show a preview before building any new screen and let him choose.
 - Charts and education pictures use fixed illustration colours on a light panel, even in dark mode.
+- **Heritage redesign – rejected (Nov 2026):** graphite, cloud white and sunshine yellow, Jost + Cormorant Garamond (serif) fonts and glass-edged cards, applied to the whole app. It looked fine in previews but bad on the phone, and was fully undone on 6 Nov 2026. Don't bring it back.
+- Before any app-wide visual change, change one screen first and let the owner check it **on the phone**, not only in a preview.
 
 ## 8. Features
 
@@ -243,6 +248,8 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 | 22 | Stage 3: mouth status (this build failed; see section 11) |
 | 23 | Stage 4: braces case sheet, plus the fix for Stage 3 |
 | 24 | Stage 5: patient education library |
+| 25 and up | Heritage redesign (Nov 2026): rejected on the phone and fully undone on 6 Nov 2026 |
+| Undo build | Same code as 24, with a higher versionCode so it installs as an update and keeps the data |
 
 ## 11. Things to remember (gotchas)
 - Kotlin has **no `toMutableSet()` on text**. Use `text.toSet().toMutableSet()`. This broke the v22 build in MouthStatus.kt.
@@ -252,8 +259,15 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 - `saveTreatment()` also marks today's appointment as arrived.
 - `saveBooking()` replaces any earlier booking (one booking per patient).
 - Planned treatments (status 0) count as an estimate, not as billed.
+- These names belonged to the undone redesign and **do not exist** in the code: DisplayFont, BodyFont, RichCard, glassEdge, Brand.Sun, OnSun, Rich, Cloud, Accent, OnAccent, Focus, GlassEdge.
+- Kotlin 2.0 reports a named argument given twice (for example `fontFamily` twice) as **"None of the following candidates is applicable"**.
+- In tool scripts, apply only one text-replacement rule per line. Several rules on the same line can chain (17 sp → 21 sp → 24 sp).
+- A workflow's GITHUB_TOKEN can't create, change or delete files in `.github/workflows`. Delete tool files by hand.
+- The GitHub web editor error **"File could not be edited"** means the page is out of date because something was saved in the meantime. Reload the page, paste again and commit.
+- Long chats get condensed, and Claude then loses the exact code of files it saw earlier. Paste the current file again before it is changed.
 
 ## 12. Pending & ideas
+- **Repo:** it was public for a short time in Nov 2026 so Claude could read the files. Keep it private.
 - **Gum chart PDF report:** needs the current Pdf.kt so it matches the bills' letterhead.
 - **Google Drive backup:** finish the fix.
   1. Enable the Drive API.
@@ -278,10 +292,11 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 - Windows app: discussed, not wanted.
 
 ## 13. Rules for Claude
-- The repo is private, so Claude can't read it. **Ask for the current contents of a file before changing it.**
+- The repo is private, so Claude can't read it. **Ask for the current contents of a file before changing it**, even if it was shown earlier in the chat. The owner shares a file by opening it on GitHub, tapping **Copy raw file** and pasting it into the chat.
+- Never rebuild a whole file from memory or from a summary. Work only from the pasted current file.
 - Send only the files a change needs, not all files.
 - Prefer a new self-contained file plus a small one-time workflow tool. The tool edits existing files, raises the version and starts the build.
-- For app-wide colour or code changes, use a workflow tool instead of pasting many files.
+- For app-wide colour or code changes, use a workflow tool instead of pasting many files. Try visual changes on one screen first and let the owner check them on the phone.
 - Show a preview before building a new screen; the owner picks the design.
 - Never ask for or send `clinic.keystore`.
 - Explain steps simply, with direct GitHub links (create/edit file links, Actions pages).
