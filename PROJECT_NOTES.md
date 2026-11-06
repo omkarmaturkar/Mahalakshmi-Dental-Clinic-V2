@@ -1,7 +1,7 @@
 # Mahalakshmi Dental Clinic App – Project Notes
 
 > Paste this whole file at the start of any new chat with Claude so it knows the project.
-> Last updated: 6 Nov 2026 · App code: version 24.0 (the Heritage redesign was tried and undone)
+> Last updated: 6 Nov 2026 · Version 30.0 (Fixes round 1)
 
 ---
 
@@ -11,7 +11,7 @@
 |---|---|
 | Repo (private) | https://github.com/omkarmaturkar/Mahalakshmi-Dental-Clinic-V2 |
 | Package | `com.mahalakshmi.dental` |
-| Version | Code of 24.0. The versionCode was raised above the redesign builds when the redesign was undone (exact number in `app/build.gradle.kts`) |
+| Version | 30.0 (versionCode 30) |
 | Tech | Kotlin 2.0.21 · Jetpack Compose · AGP 8.7.3 · Gradle 8.11.1 · minSdk 26 · target/compile 35 |
 | Extra libraries | androidx.biometric 1.1.0 · fragment-ktx 1.8.5 · work-runtime-ktx 2.9.1 · play-services-auth 21.2.0 |
 | Database | Plain SQLite (`ClinicDb` extends `SQLiteOpenHelper`, DB version 4). No Room. |
@@ -26,11 +26,10 @@
 
 ## 3. Building the app
 - **build.yml** (Actions → Build APK → Run workflow). Inputs: *Trial days* (0 = full version) and *Your contact*. It writes `TrialConfig.kt` (TRIAL_UNTIL, TRIAL_CONTACT) at build time. Artifact name: FULL or TRIAL-until-date.
-- Signing: `app/clinic.keystore`, alias `clinic`, passwords in `app/build.gradle.kts`. **Never share the keystore.**
-- One-time tools in `.github/workflows/` have all been run already. **Do not run them again.**
-  - Older tools: recolor, darkmode, teeth, security.
-  - New tools: sittings, perio, surfaces, braces, education. Each one inserted a card into `PatientScreens.kt`, raised the version and started a build.
-  - Redesign tools from Nov 2026 (heritage-look, code-view, heritage-finish, fix-fonts, undo-heritage) belonged to the Heritage redesign, which was undone. Delete any that are still there and never run them.
+- **Signing:** `app/clinic.keystore`, alias `clinic`. The passwords are GitHub repository secrets `CLINIC_STORE_PASSWORD` and `CLINIC_KEY_PASSWORD` (Settings → Secrets and variables → Actions → Secrets). `app/build.gradle.kts` reads them; no file contains them. **Never share the keystore.**
+- If the build stops at "Check the signing passwords", a secret is missing (or was saved under Variables instead of Secrets).
+- **Fonts:** the Poppins files are saved in `app/src/main/res/font`. build.yml downloads them only if they are missing.
+- **Tools:** one-time tools are deleted after they have run, so only build.yml stays in `.github/workflows`. All earlier tools have been run (recolor, darkmode, teeth, security, sittings, perio, surfaces, braces, education, the Heritage tools, Fixes round 1). Delete any that are still there and never run them again.
 - **Finding build errors:** open the failed run → job **build** → step **Build the APK** → search `e: file:///`. Each line gives the file, the line number and the problem.
 - **Private repo limits:** GitHub Free gives 2,000 build minutes a month for private repos, and APK downloads count towards 500 MB of storage. If a build fails because storage is full, delete the downloads of old runs.
 - **Undoing a change:** a one-time tool puts the `app` folder back from git history, but raises versionCode above the installed build. An APK with a lower versionCode can't be installed over the app without uninstalling, and uninstalling erases the data.
@@ -40,11 +39,11 @@
 **Core & navigation**
 | File | What's in it |
 |---|---|
-| MainActivity.kt | Screen sealed class, ClinicApp (drawer + floating bottom bar; tablet ≥900dp permanent menu), TrialGate, NavArea (contentKey "tabs"), ScreenHost |
+| MainActivity.kt | Screen sealed class, ClinicApp (drawer + floating bottom bar; tablet ≥900dp permanent menu), TrialGate, NavArea (contentKey "tabs"), ScreenHost. Refreshes every screen when a new day starts; removes leftover data in the background at start |
 | SwipeTabs.kt | TabPager: swipe between Home/Patients/Schedule/Finance; tabIndexOf() |
 | Theme.kt | AppTheme (Light/Dark/Auto), Brand colours (getters), ThemeToggle, AppearanceRow, all building blocks (see section 9) |
 | Menu.kt | AppMenu (Appearance + App lock under Settings), SectionTopBar, BottomNavBar (dark pill with animated NavPill) |
-| SplashScreen.kt | Logo animation with shine and sparkle |
+| SplashScreen.kt | Logo animation with shine and sparkle (fits in the 1.1 s the app shows it) |
 | CrashGuard.kt | Saves last_crash.txt; CrashReportScreen |
 
 **Home, lists, money**
@@ -52,19 +51,20 @@
 |---|---|
 | TodayScreen.kt | "Spotlight" home: greeting + ThemeToggle, swipeable next-patient card, 4 metric cards, quick actions, recalls. PatientPickerDialog. HomeColors (dark-mode aware) |
 | PatientsScreen.kt | All patients with search and filters (All/Dues/Today); DueCard with remind button |
+| PatientCards.kt | filterPatients(), patientSubtitle(), PatientFilters, PatientCard, DueBadge (used by the patient list and the patient picker) |
 | ScheduleScreen.kt | Next 30 days of appointments; DayBooking, bookingsBetween(), appointmentReminder() |
 | FinanceScreen.kt | Today/This week/This month/Last month + custom range (DateRangePicker); paymentsBetween(), billedByDoctor() |
 
 **Patient file**
 | File | What's in it |
 |---|---|
-| PatientScreens.kt | PatientFileScreen (tabs on phone, two columns on tablet), PatientHeader, treatment/payment cards, PaymentRow |
+| PatientScreens.kt | PatientFileScreen (tabs on phone, two columns on tablet), PatientHeader, treatment/payment cards, PaymentRow, reminderMessage(p, nextVisit, clinicName) |
 | PatientEdit.kt | Patient form, tenDigits(), 10-digit mobile check, duplicate phone warning |
-| PatientSheets.kt | TreatmentDialog, ReceivePaymentDialog, BookingDialog, NoteDialog, PhotoOptionsDialog, BeforeAfterDialog, OldStatusChart |
+| PatientSheets.kt | TreatmentDialog, ReceivePaymentDialog, BookingDialog, NoteDialog, PhotoOptionsDialog, BeforeAfterDialog |
+| PhotosAndDates.kt | treatmentOptions, withDay(), DatePick(), photo helpers (importPhoto, PhotoImage, PhotoViewer, cameraTempFile, loadBitmap, sharePhoto) |
 | PaymentEdit.kt | EditPaymentDialog, updatePayment(id, amount, mode, date) |
 | CaseData.kt | Treatment, Payment, CaseNote, CasePhoto, Booking, Account; all CRUD; buildHistory(); priceFor()/rememberPrice(); doctorNames() |
 | DentalChart.kt | Real tooth shapes: StatusChart (patient file) and ToothChart (choose teeth) |
-| VisitScreen.kt | Old visit form (legacy), OldToothChart, DatePick(), withDay() |
 | Prescription.kt | Medicine, Prescription, RxTemplate, PrescriptionScreen, prescriptionPdf() |
 
 **Clinical modules (added Nov 2026)**
@@ -87,13 +87,12 @@
 | File | What's in it |
 |---|---|
 | Database.kt | ClinicDb; onOpen() calls createExtraTables() + visits conversion; patientCount(), stats(), upcoming() |
-| ExtraTables.kt | createExtraTables(), deleteVisitExtras(), deletePatientExtras() |
+| ExtraTables.kt | createExtraTables(), deleteVisitExtras(), deletePatientExtras(), deleteFeatureData(), removeLeftoverData() |
 | Backup.kt | Folder backup (autoBackup, exportZip, restoreZip, restoreFromFolder) |
 | DriveBackup.kt | Google Drive backup (drive.file scope): backup, restore, silentToken, markConnected, latestBackupDate, autoBackup |
 | BackupScreen.kt | Drive + folder backup with a live status line (updates every 2 s) |
 | Security.kt | AppLock (PIN + fingerprint), LockGate, AppLockRow; AutoBackup + DriveBackupWorker |
 | Trial.kt / TrialConfig.kt | Trial system (TrialConfig.kt is written by build.yml) |
-| HomeScreen.kt | Old home (unused, kept for reference) |
 
 ## 5. Database
 
@@ -101,8 +100,9 @@
 - treatments.status: 0 planned · 1 ongoing · 2 done
 - appointments.status: 0 booked · 1 done · 2 cancelled
 - doctors: id, name, qualification, specialty, reg_no, phone, on_bills, main, visiting, share_percent, active
+- Patient ids use AUTOINCREMENT, so a deleted patient's number is never reused.
 
-**Feature tables.** Each feature file creates its own tables on first use (`CREATE TABLE IF NOT EXISTS`). They are not in ExtraTables.kt, and the DB version did not change.
+**Feature tables.** Each feature file creates its own tables on first use (`CREATE TABLE IF NOT EXISTS`). They are not created in ExtraTables.kt, and the DB version did not change.
 
 | Table | File | Columns |
 |---|---|---|
@@ -114,6 +114,7 @@
 | ortho_payments | Ortho.kt | key (case_id, payment_id); links braces payments to the case |
 
 - All tables are in the same database file, so backups and restores include them automatically.
+- **Deleting a patient** removes everything of theirs: treatments, payments, notes, photos, appointments, prescriptions, and the feature tables above (deletePatientExtras → deleteFeatureData). removeLeftoverData() runs in the background each time the app starts and removes rows left behind by older versions.
 - **Perio JSON per tooth:** pd[6], bop[6] (0/1), rc/rt (recession cheek/tongue, −1 = none), mob, fur, mis. Spots 0–2 are the cheek side (back, middle, front); spots 3–5 are the palate/tongue side.
 - **Surfaces in tooth_status:** M (front), O (biting; shown as I on front teeth), D (back), B (cheek), L (tongue/palate). Example: "MO". Healthy teeth have no row.
 - **Shared preferences:** "appearance" (theme), app lock settings, "education" → "lang" (0 English, 1 Hindi, 2 Marathi).
@@ -130,11 +131,13 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 
 ## 7. Design
 - "Spotlight" home: dark next-patient card, light metric cards, dark floating bottom bar.
-- Brand colours are getters that switch with dark mode: Ink, Sub, Faint, Line, Soft, Surface (white / dark card), Night, GreenDeep, GreenText, GreenSoft, GreenLine, Gold, GoldDeep, GoldSoft, Red, RedSoft. Use `Brand.Surface` instead of `Color.White`.
+- Brand colours are getters that switch with dark mode: Ink, Sub, Faint, Line, Soft, Surface (white / dark card), Night, Slate, GreenDeep, GreenText, GreenSoft, GreenLine, Gold, GoldDeep, GoldSoft, Red, RedSoft. Use `Brand.Surface` instead of `Color.White`.
 - The owner prefers **design A: clean, light cards that are easy to read**. Show a preview before building any new screen and let him choose.
 - Charts and education pictures use fixed illustration colours on a light panel, even in dark mode.
 - **Heritage redesign – rejected (Nov 2026):** graphite, cloud white and sunshine yellow, Jost + Cormorant Garamond (serif) fonts and glass-edged cards, applied to the whole app. It looked fine in previews but bad on the phone, and was fully undone on 6 Nov 2026. Don't bring it back.
 - Before any app-wide visual change, change one screen first and let the owner check it **on the phone**, not only in a preview.
+- **Patient file test (v30):** Rx, Bill, prescription and photo icons in calm grey (Brand.Slate on Brand.Soft) instead of purple and blue; hint text 12 sp in Brand.Sub instead of 11 sp in Brand.Faint; list buttons 44 dp instead of 38 dp. Waiting for the owner's OK; then the same on the other screens.
+- **Colour rule for next rounds:** green = brand and money received, gold = attention, red = dues and danger, grey for everything else.
 
 ## 8. Features
 
@@ -172,6 +175,7 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
   - "+ Track another treatment in sittings" (adds 2 generic sittings).
 - **Mark sitting done:**
   - Asks for the date and an optional payment (`addPayment`, linked through `payment_id`).
+  - If money was already taken at that sitting (it was marked done before), it shows "₹X already received" and leaves the amount empty (v30).
   - Then offers the receipt (PdfActionsDialog) and BookingDialog, with the reason "Treatment: next sitting".
 - `syncTreatmentWithSittings`: first sitting done → In progress; all done → Done.
 - Fee/Paid/Left on the card counts only payments taken at sittings.
@@ -222,6 +226,16 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 - Swipe between steps. **Draw** mode allows red finger drawing, with Clear. **Send** puts all steps on WhatsApp in the chosen language.
 - The Hindi and Marathi wording should be checked by the doctor.
 
+### Fixes round 1 (v30)
+- Deleting a patient removes all their records, including sittings, gum charts, mouth status and braces records. Leftovers from earlier deletions are removed at start.
+- A sitting that was already paid doesn't suggest the fee again (no double payments).
+- At midnight every screen refreshes; Finance's Today/This week/This month move to the new dates.
+- WhatsApp reminders from the patient file and Pending dues use the clinic name from Clinic & doctors.
+- The start screen animation fits in the 1.1 s it is shown, so "Caring for every smile" appears.
+- Old unused code removed: old home screen, old visit form, old tooth charts.
+- Signing passwords moved to GitHub secrets; Poppins fonts kept in the repo.
+- Patient file look test (section 7).
+
 ## 9. Shared building blocks (signatures confirmed by working builds)
 - `AppCard(modifier, onClick = …, padding = …) { … }` · `Pill(text, bg, fg, icon?)`
 - `SoftButton(text, icon?, modifier, bg =, fg =, height =) { … }` · `GradientButton(text, modifier, icon?, enabled =, height =) { … }`
@@ -230,6 +244,7 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 - `ConfirmDialog(title, message, confirmText =, onConfirm =, onDismiss =)` · `CircleIconButton(icon, onClick, bg =, tint =, size =)`
 - `DatePick(epochDay, onDismiss =) { day -> }` · `BookingDialog(initial, defaultReason, onDismiss, onCancelBooking) { day, time, reason -> }`
 - `PdfActionsDialog(title, subtitle, phone, message, build = { ctx -> … }, onDismiss)`
+- `reminderMessage(patient, nextVisit, clinicName)` · `appointmentReminder(booking, clinicName)` · `recallMessage(patient, clinicName)`
 - **Helpers:**
   - Formatting: `rs()`, `numText()`, `fmtDate(ms)`, `fmtDay(epochDay)`
   - Dates: `todayEpochDay()`, `epochDayOf(ms)`, `withDay(ms, day)`
@@ -248,33 +263,40 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 | 22 | Stage 3: mouth status (this build failed; see section 11) |
 | 23 | Stage 4: braces case sheet, plus the fix for Stage 3 |
 | 24 | Stage 5: patient education library |
-| 25 and up | Heritage redesign (Nov 2026): rejected on the phone and fully undone on 6 Nov 2026 |
-| Undo build | Same code as 24, with a higher versionCode so it installs as an update and keeps the data |
+| 25–28 | Heritage redesign (Nov 2026): rejected on the phone and fully undone on 6 Nov 2026 |
+| 29 | Undo build: same code as 24, with a higher number so it installs as an update |
+| 30 | Fixes round 1 (see section 8) |
 
 ## 11. Things to remember (gotchas)
 - Kotlin has **no `toMutableSet()` on text**. Use `text.toSet().toMutableSet()`. This broke the v22 build in MouthStatus.kt.
 - After any database change, call `DataBus.changed()` so all screens refresh.
 - **Payments belong to the patient, not to a treatment.** Sittings and braces only link payment ids to show "paid", so the patient's balance stays correct.
-- Feature tables use an `ensure…()` function that runs once per database connection, so the tables come back automatically after a restore.
+- Feature tables use an `ensure…()` function that runs once per database connection, so the tables come back automatically after a restore. Code that touches a feature table from elsewhere must first check that it exists (`PRAGMA table_info`), because it is only created when the feature is first used.
 - `saveTreatment()` also marks today's appointment as arrived.
 - `saveBooking()` replaces any earlier booking (one booking per patient).
 - Planned treatments (status 0) count as an estimate, not as billed.
+- Values remembered with `remember(...)` that depend on today's date must include the day in their keys (Finance does), or they stay on yesterday after midnight.
 - These names belonged to the undone redesign and **do not exist** in the code: DisplayFont, BodyFont, RichCard, glassEdge, Brand.Sun, OnSun, Rich, Cloud, Accent, OnAccent, Focus, GlassEdge.
 - Kotlin 2.0 reports a named argument given twice (for example `fontFamily` twice) as **"None of the following candidates is applicable"**.
 - In tool scripts, apply only one text-replacement rule per line. Several rules on the same line can chain (17 sp → 21 sp → 24 sp).
-- A workflow's GITHUB_TOKEN can't create, change or delete files in `.github/workflows`. Delete tool files by hand.
+- A workflow's GITHUB_TOKEN can't create, change or delete files in `.github/workflows`. Edit or delete workflow files by hand.
 - The GitHub web editor error **"File could not be edited"** means the page is out of date because something was saved in the meantime. Reload the page, paste again and commit.
 - Long chats get condensed, and Claude then loses the exact code of files it saw earlier. Paste the current file again before it is changed.
 
 ## 12. Pending & ideas
+- **Patient file test:** the owner checks it on the phone. If OK, the same look goes to the other screens (e.g. teal in Schedule, purple/blue chips, small hints, small buttons).
+- **Next fixes (from the 6 Nov review):**
+  - No. 6: load data in the background instead of while screens draw (one screen at a time).
+  - No. 13: one shared title style and one shared dialog layout.
+  - No. 14: compact one-line rows for gum health, mouth status, braces and education in the Treatments tab (show a preview first).
+- **Google Drive backup:** finish the setup, then do a test restore on a second phone.
+  1. Enable the Google Drive API.
+  2. Google Auth Platform → Data Access: add the drive.file scope.
+  3. Google Auth Platform → Audience: Publish app (in Testing, Google cancels access after 7 days).
+  4. In the app: Disconnect and connect Google Drive again, then Back up now.
+  - The SHA-1 is in the build log, step "Show SHA-1".
 - **Repo:** it was public for a short time in Nov 2026 so Claude could read the files. Keep it private.
 - **Gum chart PDF report:** needs the current Pdf.kt so it matches the bills' letterhead.
-- **Google Drive backup:** finish the fix.
-  1. Enable the Drive API.
-  2. Add the drive.file scope.
-  3. Publish the app or add test users.
-  4. Disconnect and reconnect in the app.
-  - The SHA-1 is in the build log, step "Show SHA-1".
 - The doctor to review the Hindi/Marathi lines in Education.kt.
 - Optional: open the education library from the main menu too (right now it opens only from the patient file).
 - **Top 3 next (researched):**
@@ -292,12 +314,13 @@ TreatmentProgress → OrthoCard → treatments card (teeth chart) → MouthStatu
 - Windows app: discussed, not wanted.
 
 ## 13. Rules for Claude
-- The repo is private, so Claude can't read it. **Ask for the current contents of a file before changing it**, even if it was shown earlier in the chat. The owner shares a file by opening it on GitHub, tapping **Copy raw file** and pasting it into the chat.
+- The repo is private, so Claude can't read it. **Ask for the current contents of a file before changing it**, even if it was shown earlier in the chat. The owner shares a file by opening it on GitHub, tapping **Copy raw file** and pasting it into the chat (or attaching it).
 - Never rebuild a whole file from memory or from a summary. Work only from the pasted current file.
 - Send only the files a change needs, not all files.
 - Prefer a new self-contained file plus a small one-time workflow tool. The tool edits existing files, raises the version and starts the build.
+- **Every tool checks every line first.** If one line is not exactly as expected, it stops with "NOTHING WAS CHANGED" and changes nothing.
 - For app-wide colour or code changes, use a workflow tool instead of pasting many files. Try visual changes on one screen first and let the owner check them on the phone.
 - Show a preview before building a new screen; the owner picks the design.
-- Never ask for or send `clinic.keystore`.
+- Never ask for or send `clinic.keystore`. Never write the signing passwords into a file; they live in GitHub secrets.
 - Explain steps simply, with direct GitHub links (create/edit file links, Actions pages).
 - The owner asked that the main chat is never closed.
