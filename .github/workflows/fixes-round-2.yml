@@ -1,0 +1,132 @@
+name: Tool - Fixes round 2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check every line first, then apply the changes
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          K = "app/src/main/java/com/mahalakshmi/dental/"
+          texts = {}
+          problems = []
+
+          def load(name):
+              if name not in texts:
+                  p = pathlib.Path(K + name)
+                  texts[name] = p.read_text(encoding="utf-8") if p.exists() else None
+                  if texts[name] is None:
+                      problems.append(f"{name}: file not found")
+              return texts[name]
+
+          def change(name, old, new, count=1):
+              t = load(name)
+              if t is None:
+                  return
+              found = t.count(old)
+              if found != count:
+                  problems.append(f"{name}: expected {count}, found {found}: {old[:80]!r}")
+                  return
+              texts[name] = t.replace(old, new)
+
+          # Calm grey instead of blue
+          change("ClinicSettings.kt",
+                 'Pill("Visiting", Color(0xFFE8F0FF), Color(0xFF2F6FED))',
+                 'Pill("Visiting", Brand.Soft, Brand.Slate)')
+
+          # Bigger buttons
+          change("ScheduleScreen.kt",
+                 "CircleIconButton(AppIcons.Chat, onRemind, bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 38.dp)",
+                 "CircleIconButton(AppIcons.Chat, onRemind, bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 44.dp)")
+          change("ScheduleScreen.kt",
+                 "CircleIconButton(Icons.Filled.Close, onCancel, bg = Brand.Soft, tint = Brand.Faint, size = 38.dp)",
+                 "CircleIconButton(Icons.Filled.Close, onCancel, bg = Brand.Soft, tint = Brand.Sub, size = 44.dp)")
+          change("Prescription.kt",
+                 "Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onRemove), contentAlignment = Alignment.Center)",
+                 "Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onRemove), contentAlignment = Alignment.Center)")
+          change("Ortho.kt",
+                 "Modifier.size(36.dp).clip(CircleShape).background(Brand.Soft).clickable(onClick = onClick)",
+                 "Modifier.size(44.dp).clip(CircleShape).background(Brand.Soft).clickable(onClick = onClick)")
+
+          # Easier-to-read small text
+          change("Theme.kt",
+                 'setting", fontSize = 11.sp, color = Brand.Faint',
+                 'setting", fontSize = 12.sp, color = Brand.Sub')
+          change("Menu.kt",
+                 '"Version $appVersion", fontSize = 11.sp, color = Brand.Faint',
+                 '"Version $appVersion", fontSize = 12.sp, color = Brand.Sub')
+          change("Menu.kt",
+                 "text.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Brand.Faint,",
+                 "text.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Brand.Sub,")
+          change("TodayScreen.kt",
+                 "Text(sub, fontSize = 12.sp, color = Brand.Faint, maxLines = 1, overflow = TextOverflow.Ellipsis)",
+                 "Text(sub, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)")
+          change("DentalChart.kt",
+                 'Text("Right", fontSize = 11.sp, color = Brand.Faint)',
+                 'Text("Right", fontSize = 12.sp, color = Brand.Sub)')
+          change("DentalChart.kt",
+                 'Text("Left", fontSize = 11.sp, color = Brand.Faint)',
+                 'Text("Left", fontSize = 12.sp, color = Brand.Sub)')
+
+          # No. 13: every pop-up window title the same size
+          change("Sittings.kt",
+                 'Text("Track in sittings", fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink)',
+                 'Text("Track in sittings", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)')
+          change("TodayScreen.kt",
+                 "Text(title, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink)",
+                 "Text(title, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)")
+          change("Security.kt",
+                 "fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, textAlign = TextAlign.Center",
+                 "fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, textAlign = TextAlign.Center")
+          change("PaymentEdit.kt",
+                 'Text("Edit payment", fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)',
+                 'Text("Edit payment", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)')
+          change("PatientSheets.kt",
+                 'Text("Receive payment", fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)',
+                 'Text("Receive payment", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)')
+
+          if problems:
+              print("NOTHING WAS CHANGED, because these lines were not as expected:")
+              print("\n".join(problems))
+              sys.exit(1)
+
+          for name, t in texts.items():
+              pathlib.Path(K + name).write_text(t, encoding="utf-8")
+              print("Updated", name)
+          PY
+
+      - name: Raise the version
+        run: |
+          python3 - <<'PY'
+          import re
+          p = "app/build.gradle.kts"
+          s = open(p).read()
+          code = int(re.search(r"versionCode\s*=?\s*(\d+)", s).group(1)) + 1
+          s = re.sub(r"(versionCode\s*=?\s*)\d+", lambda m: m.group(1) + str(code), s, count=1)
+          s = re.sub(r'(versionName\s*=?\s*")[^"]*"', lambda m: m.group(1) + f'{code}.0"', s, count=1)
+          open(p, "w").write(s)
+          print("Version is now", code)
+          PY
+
+      - name: Save
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898315+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fixes round 2: same clean look on the other screens, equal pop-up titles"
+          git push
+
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main || echo "Please start Build APK yourself from the Actions page"
