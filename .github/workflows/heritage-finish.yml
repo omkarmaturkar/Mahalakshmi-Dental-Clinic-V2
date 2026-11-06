@@ -12,6 +12,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Put back the original patient file
+        run: |
+          f=app/src/main/java/com/mahalakshmi/dental/PatientScreens.kt
+          if grep -q "NeutralTint" "$f"; then
+            for c in $(git log --format=%H -- "$f"); do
+              git show "$c:$f" > /tmp/old.kt
+              if ! grep -q "NeutralTint" /tmp/old.kt; then
+                cp /tmp/old.kt "$f"
+                echo "Put back the original patient file from $c"
+                break
+              fi
+            done
+          else
+            echo "The original patient file is already in place"
+          fi
 
       - name: Give the remaining screens the new look
         run: |
@@ -42,7 +60,6 @@ jobs:
                "p.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink,"),
               ("Text(rs(p.remaining), color = Brand.Red, fontWeight = FontWeight.Bold, fontSize = 14.sp)",
                "Text(rs(p.remaining), color = Brand.Red, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)"),
-              ("listOf(Brand.Green.copy(alpha = 0.55f), Color.Transparent)", "listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent)"),
               ("if (isToday) Brand.GreenDeep else Brand.GoldSoft,", "if (isToday) Brand.Accent else Brand.GoldSoft,"),
               ("if (isToday) Color.White else Brand.GoldDeep,", "if (isToday) Brand.OnAccent else Brand.GoldDeep,"),
               ("if (selected) Brand.GreenSoft else Color.Transparent", "if (selected) Brand.GoldSoft else Color.Transparent"),
@@ -75,7 +92,6 @@ jobs:
               ("Icon(Icons.Filled.Add, null, tint = Brand.GreenDeep)", "Icon(Icons.Filled.Add, null, tint = Brand.Ink)"),
           ])
           edit("BackupScreen.kt", [
-              ("listOf(Brand.Green.copy(alpha = 0.5f), Color.Transparent)", "listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent)"),
               ("Icon(AppIcons.Cloud, null, tint = Brand.GreenDeep, modifier = Modifier.size(30.dp))",
                "Icon(AppIcons.Cloud, null, tint = Brand.Ink, modifier = Modifier.size(30.dp))"),
               ('Text("Google Drive backup", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)',
@@ -116,9 +132,10 @@ jobs:
                '"Trial period has ended", fontFamily = DisplayFont, fontSize = 28.sp, fontWeight = FontWeight.SemiBold,'),
           ])
 
-          # General touches for every other screen: serif titles, yellow keypad buttons, spinners
+          # General touches for every older screen (the patient file included):
+          # serif titles, yellow keypad buttons, spinners and warm glows
           mine = {"Theme.kt", "TodayScreen.kt", "Menu.kt", "SplashScreen.kt", "FinanceScreen.kt",
-                  "Security.kt", "PatientScreens.kt", "TrialConfig.kt"}
+                  "Security.kt", "TrialConfig.kt"}
           general = [
               ("fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink",
                "fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink"),
@@ -133,21 +150,27 @@ jobs:
               ("CircularProgressIndicator(color = Brand.GreenDeep", "CircularProgressIndicator(color = Brand.Focus"),
               ("bg = Brand.GreenDeep, fg = Color.White", "bg = Brand.Sun, fg = Brand.OnSun"),
           ]
+          glow = re.compile(r"Brand\.Green\.copy\(alpha = 0\.\d+f\), Color\.Transparent")
           for p in sorted(root.glob("*.kt")):
               if p.name in mine:
                   continue
               lines = p.read_text(encoding="utf-8").split("\n")
               count = 0
-              for i, line in enumerate(lines):
-                  if "fontFamily" in line:
+              for i in range(len(lines)):
+                  near = "\n".join(lines[max(0, i - 2): i + 1])
+                  if "fontFamily" in near:
                       continue
+                  line = lines[i]
                   for old, new in general:
                       if old in line:
                           line = line.replace(old, new)
                           count += 1
                   lines[i] = line
+              text = "\n".join(lines)
+              text, n = glow.subn("Brand.Sun.copy(alpha = 0.16f), Color.Transparent", text)
+              count += n
               if count:
-                  p.write_text("\n".join(lines), encoding="utf-8")
+                  p.write_text(text, encoding="utf-8")
                   report.append(f"ok   {p.name}: {count} general change(s)")
           print("\n".join(report))
           PY
@@ -183,4 +206,4 @@ jobs:
       - name: Start the build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build.yml --ref main
+        run: gh workflow run build.yml --ref main || echo "Please start Build APK yourself from the Actions page"
