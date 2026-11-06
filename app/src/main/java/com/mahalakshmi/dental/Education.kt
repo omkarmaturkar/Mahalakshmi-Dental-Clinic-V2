@@ -800,7 +800,7 @@ fun EducationCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), onClick = { open = true }, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Explain to patient", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
+                Text("Explain to patient", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
                 Text("Pictures and simple words · English, हिंदी, मराठी", fontSize = 12.sp, color = Brand.Sub)
             }
             Spacer(Modifier.width(8.dp))
@@ -843,7 +843,7 @@ private fun EducationScreen(db: ClinicDb, patientId: Long, onClose: () -> Unit) 
                 CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, onClose, bg = Brand.Surface, tint = Brand.Ink, size = 44.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Explain to patient", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.Ink)
+                    Text("Explain to patient", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink)
                     Text("Works without internet", fontSize = 12.sp, color = Brand.Sub)
                 }
             }
@@ -934,7 +934,7 @@ private fun EduTopicPanel(topic: EduTopic, lang: Int, patientName: String, phone
 
     AppCard(Modifier.fillMaxWidth(), padding = 16.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(topic.title(lang), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink, modifier = Modifier.weight(1f))
+            Text(topic.title(lang), fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink, modifier = Modifier.weight(1f))
             Text("Step ${page + 1} of ${topic.steps.size}", fontSize = 12.sp, color = Brand.Sub)
         }
         Spacer(Modifier.height(10.dp))

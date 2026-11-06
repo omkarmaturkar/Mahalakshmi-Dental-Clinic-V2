@@ -440,13 +440,13 @@ private fun MedicineRow(number: Int, m: Medicine, onEdit: () -> Unit, onRemove: 
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(30.dp).clip(CircleShape).background(Brand.Surface), contentAlignment = Alignment.Center) {
-            Text("$number", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenDeep)
+            Text("$number", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(m.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
             val info = listOf(m.dose, m.timing, m.days).filter { it.isNotBlank() }.joinToString("  ·  ")
-            if (info.isNotBlank()) Text(info, fontSize = 13.sp, color = Brand.GreenDeep, fontWeight = FontWeight.Medium)
+            if (info.isNotBlank()) Text(info, fontSize = 13.sp, color = Brand.GoldDeep, fontWeight = FontWeight.Medium)
             if (m.note.isNotBlank()) Text(m.note, fontSize = 12.sp, color = Brand.Sub)
         }
         Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
@@ -458,16 +458,16 @@ private fun MedicineRow(number: Int, m: Medicine, onEdit: () -> Unit, onRemove: 
 @Composable
 private fun TemplateChip(text: String, removing: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(50)).background(if (removing) Brand.RedSoft else Brand.GreenSoft)
+        Modifier.clip(RoundedCornerShape(50)).background(if (removing) Brand.RedSoft else Brand.Soft)
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             if (removing) Icons.Filled.Close else DocIcons.Pill, null,
-            tint = if (removing) Brand.Red else Brand.GreenDeep, modifier = Modifier.size(15.dp)
+            tint = if (removing) Brand.Red else Brand.GoldDeep, modifier = Modifier.size(15.dp)
         )
         Spacer(Modifier.width(6.dp))
-        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (removing) Brand.Red else Brand.GreenText, maxLines = 1)
+        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (removing) Brand.Red else Brand.Ink, maxLines = 1)
     }
 }
 
@@ -497,15 +497,15 @@ private fun MedicineDialog(initial: Medicine?, onDismiss: () -> Unit, onSave: (M
         ) {
             Text(
                 if (initial == null) "Add medicine" else "Edit medicine",
-                fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink
+                fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink
             )
             AppField(name, { name = it }, "Medicine name *", icon = DocIcons.Pill, caps = KeyboardCapitalization.Words)
             if (suggestions.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     suggestions.forEach { s ->
                         Text(
-                            s, fontSize = 13.sp, color = Brand.GreenText, maxLines = 1,
-                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Brand.GreenSoft)
+                            s, fontSize = 13.sp, color = Brand.Ink, maxLines = 1,
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(Brand.Soft)
                                 .clickable { name = s }.padding(horizontal = 12.dp, vertical = 7.dp)
                         )
                     }
@@ -545,7 +545,7 @@ private fun TemplateNameDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) 
             Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
                 .background(Brand.Surface).padding(26.dp)
         ) {
-            Text("Save as template", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
+            Text("Save as template", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
             Text("Use a short name, e.g. After extraction", fontSize = 13.sp, color = Brand.Sub)
             Spacer(Modifier.height(16.dp))
             AppField(name, { name = it }, "Template name")

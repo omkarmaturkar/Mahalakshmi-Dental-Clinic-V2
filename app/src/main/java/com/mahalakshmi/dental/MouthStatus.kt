@@ -293,7 +293,7 @@ fun MouthStatusCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), onClick = { open = true }, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Mouth status", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
+                Text("Mouth status", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
                 Text(
                     if (list.isEmpty()) "Record decay, fillings, crowns and missing teeth"
                     else "Updated ${fmtDate(list.maxOf { it.updatedAt })}",
@@ -425,7 +425,7 @@ private fun MouthStatusScreen(db: ClinicDb, patientId: Long, onClose: () -> Unit
                 CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, { close() }, bg = Brand.Surface, tint = Brand.Ink, size = 44.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Mouth status", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.Ink)
+                    Text("Mouth status", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink)
                     Text(
                         patient?.name.orEmpty() + if (updated != null) " · updated ${fmtDate(updated)}" else "",
                         fontSize = 12.sp, color = Brand.Sub, maxLines = 1
@@ -567,7 +567,7 @@ private fun MouthToothPanel(
             MouthSurfacePicker(n, s, onSurface)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Tooth $n", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
+                Text("Tooth $n", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
                 Text(mouthToothName(n), fontSize = 12.sp, color = Brand.Sub)
                 Spacer(Modifier.height(10.dp))
                 Text("Tap surfaces to mark", fontSize = 11.sp, color = Brand.Sub)

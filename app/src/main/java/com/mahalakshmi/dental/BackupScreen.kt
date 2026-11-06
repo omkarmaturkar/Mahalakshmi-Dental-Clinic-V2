@@ -233,7 +233,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                         val c = Offset(size.width, 0f)
                         val r = size.width * 0.7f
                         drawCircle(
-                            Brush.radialGradient(listOf(Brand.Green.copy(alpha = 0.5f), Color.Transparent), center = c, radius = r),
+                            Brush.radialGradient(listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent), center = c, radius = r),
                             radius = r, center = c
                         )
                     }.padding(22.dp),
@@ -242,10 +242,10 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                     Box(
                         Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(Brand.Surface),
                         contentAlignment = Alignment.Center
-                    ) { Icon(AppIcons.Cloud, null, tint = Brand.GreenDeep, modifier = Modifier.size(30.dp)) }
+                    ) { Icon(AppIcons.Cloud, null, tint = Brand.Ink, modifier = Modifier.size(30.dp)) }
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Google Drive backup", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                        Text("Google Drive backup", color = Color.White, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
                         Text(
                             if (driveOn) account.ifBlank { "Connected" } else "Safe in your Google account, like WhatsApp",
                             color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp

@@ -258,7 +258,7 @@ fun PerioCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Gum health", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
+                Text("Gum health", fontFamily = DisplayFont, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
                 Text(
                     if (latest == null) "No gum check-up yet" else "Last check-up ${fmtDate(latest.date)}",
                     fontSize = 12.sp, color = Brand.Sub
@@ -466,13 +466,13 @@ private fun PerioScreen(db: ClinicDb, initial: PerioExam, previous: PerioExam?, 
                 CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, { close() }, bg = Brand.Surface, tint = Brand.Ink, size = 44.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable { pickDate = true }) {
-                    Text("Gum chart", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.Ink)
+                    Text("Gum chart", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink)
                     Text(
                         "${patient?.name.orEmpty()} · ${fmtDate(exam.date)}",
                         fontSize = 12.sp, color = Brand.Sub, maxLines = 1
                     )
                 }
-                CircleIconButton(Icons.Filled.Share, { share() }, bg = Brand.Surface, tint = Brand.GreenDeep, size = 44.dp)
+                CircleIconButton(Icons.Filled.Share, { share() }, bg = Brand.Surface, tint = Brand.Ink, size = 44.dp)
                 if (exam.id != 0L) {
                     Spacer(Modifier.width(8.dp))
                     CircleIconButton(Icons.Filled.Delete, { askDelete = true }, bg = Brand.RedSoft, tint = Brand.Red, size = 44.dp)
@@ -618,14 +618,14 @@ private fun PerioToothColumn(
         val hot = cursor?.tooth == n
         Box(
             Modifier.fillMaxWidth().height(28.dp).clip(RoundedCornerShape(9.dp))
-                .background(if (hot) Brand.GreenSoft else Brand.Soft).clickable { onTooth(n) },
+                .background(if (hot) Brand.GoldSoft else Brand.Soft).clickable { onTooth(n) },
             contentAlignment = Alignment.Center
         ) {
             Text(
                 "$n", fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 color = when {
                     t.missing -> Brand.Faint
-                    hot -> Brand.GreenText
+                    hot -> Brand.Ink
                     else -> Brand.Ink
                 }
             )
@@ -675,7 +675,7 @@ private fun PerioTriple(n: Int, t: PerioTooth, tongue: Boolean, cursor: PerioSit
             val shape = RoundedCornerShape(6.dp)
             Column(
                 Modifier.weight(1f).fillMaxHeight().clip(shape).background(bg)
-                    .then(if (selected) Modifier.border(2.dp, Brand.GreenDeep, shape) else Modifier)
+                    .then(if (selected) Modifier.border(2.dp, Brand.Accent, shape) else Modifier)
                     .clickable(enabled = !t.missing) { onSite(PerioSite(n, idx)) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -733,7 +733,7 @@ private fun PerioKeypad(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PerioKey("◀ Back", Modifier.weight(1f), small = true, onClick = onBack)
             PerioKey("Clear", Modifier.weight(1f), small = true, onClick = onClear)
-            PerioKey("Next ▶", Modifier.weight(1f), bg = Brand.GreenDeep, fg = Color.White, small = true, onClick = onNext)
+            PerioKey("Next ▶", Modifier.weight(1f), bg = Brand.Sun, fg = Brand.OnSun, small = true, onClick = onNext)
         }
     }
 }
@@ -769,7 +769,7 @@ private fun PerioToothDialog(n: Int, t: PerioTooth, onDismiss: () -> Unit, onSav
                 .background(Brand.Surface).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Tooth $n", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
+            Text("Tooth $n", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
             ToggleRow("Tooth is missing", "It will be skipped while entering", missing) { missing = it }
             if (!missing) {
                 Text("Looseness (mobility)", fontSize = 13.sp, color = Brand.Sub, fontWeight = FontWeight.Medium)

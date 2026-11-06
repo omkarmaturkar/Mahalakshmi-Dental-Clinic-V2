@@ -97,7 +97,7 @@ fun TrialEndedScreen(onBackup: () -> Unit) {
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            "Trial period has ended", fontSize = 22.sp, fontWeight = FontWeight.Bold,
+            "Trial period has ended", fontFamily = DisplayFont, fontSize = 28.sp, fontWeight = FontWeight.SemiBold,
             color = Brand.Ink, textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(8.dp))

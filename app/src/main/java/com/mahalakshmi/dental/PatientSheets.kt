@@ -183,7 +183,7 @@ fun TreatmentDialog(
         ) {
             Text(
                 if (initial == null) "Add treatment" else "Edit treatment",
-                fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink
+                fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink
             )
             SheetLabel("Treatment")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -204,7 +204,7 @@ fun TreatmentDialog(
             SheetLabel(if (teeth.isEmpty()) "Teeth (optional)" else "Teeth")
             if (teeth.isNotEmpty()) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    teeth.sortedBy { it.toIntOrNull() ?: 0 }.forEach { Pill("Tooth $it", Brand.GreenSoft, Brand.GreenText) }
+                    teeth.sortedBy { it.toIntOrNull() ?: 0 }.forEach { Pill("Tooth $it", Brand.GoldSoft, Brand.GoldDeep) }
                 }
             }
             if (showChart) ToothChart(teeth) { n -> if (n in teeth) teeth.remove(n) else teeth.add(n) }
@@ -293,7 +293,7 @@ fun ReceivePaymentDialog(balance: Double, onDismiss: () -> Unit, onSave: (Double
                 Text("₹", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
             }
             Spacer(Modifier.height(16.dp))
-            Text("Receive payment", fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
+            Text("Receive payment", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
             Text(
                 if (balance > 0) "Balance due ${rs(balance)}" else "No balance due – this will be kept as an advance",
                 fontSize = 13.sp, color = Brand.Sub
@@ -348,7 +348,7 @@ fun BookingDialog(
         ) {
             Text(
                 if (initial == null) "Book next visit" else "Change next visit",
-                fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink
+                fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink
             )
             Text(fmtDayLong(day), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Brand.GoldDeep)
             SheetLabel("When")
@@ -386,7 +386,7 @@ fun NoteDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
             Modifier.widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
                 .background(Brand.Surface).padding(26.dp)
         ) {
-            Text("Add note", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
+            Text("Add note", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
             Text("For example: RCT sitting 2 – canals cleaned, temporary filling placed", fontSize = 13.sp, color = Brand.Sub)
             Spacer(Modifier.height(14.dp))
             AppField(text, { text = it }, "Note", lines = 4)
