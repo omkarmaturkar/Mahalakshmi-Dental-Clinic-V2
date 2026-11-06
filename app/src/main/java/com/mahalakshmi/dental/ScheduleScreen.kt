@@ -203,10 +203,10 @@ private fun ScheduleRow(b: DayBooking, onOpen: () -> Unit, onRemind: () -> Unit,
             Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
         } else {
             if (b.phone.isNotBlank()) {
-                CircleIconButton(AppIcons.Chat, onRemind, bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 38.dp)
+                CircleIconButton(AppIcons.Chat, onRemind, bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 44.dp)
                 Spacer(Modifier.width(6.dp))
             }
-            CircleIconButton(Icons.Filled.Close, onCancel, bg = Brand.Soft, tint = Brand.Faint, size = 38.dp)
+            CircleIconButton(Icons.Filled.Close, onCancel, bg = Brand.Soft, tint = Brand.Sub, size = 44.dp)
         }
     }
 }

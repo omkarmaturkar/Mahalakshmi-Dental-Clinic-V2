@@ -449,7 +449,7 @@ private fun MedicineRow(number: Int, m: Medicine, onEdit: () -> Unit, onRemove: 
             if (info.isNotBlank()) Text(info, fontSize = 13.sp, color = Brand.GreenDeep, fontWeight = FontWeight.Medium)
             if (m.note.isNotBlank()) Text(m.note, fontSize = 12.sp, color = Brand.Sub)
         }
-        Box(Modifier.size(34.dp).clip(CircleShape).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onRemove), contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Close, null, tint = Brand.Sub, modifier = Modifier.size(18.dp))
         }
     }

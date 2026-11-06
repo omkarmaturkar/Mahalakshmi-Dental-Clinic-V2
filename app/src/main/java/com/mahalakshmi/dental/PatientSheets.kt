@@ -209,7 +209,7 @@ fun ReceivePaymentDialog(balance: Double, onDismiss: () -> Unit, onSave: (Double
                 Text("₹", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
             }
             Spacer(Modifier.height(16.dp))
-            Text("Receive payment", fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
+            Text("Receive payment", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text(
                 if (balance > 0) "Balance due ${rs(balance)}" else "No balance due – this will be kept as an advance",
                 fontSize = 13.sp, color = Brand.Sub

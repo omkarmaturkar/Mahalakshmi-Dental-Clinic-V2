@@ -99,11 +99,11 @@ private fun TeethChart(look: (String) -> ToothLook?, onTooth: (String) -> Unit) 
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             TeethArch(upperArch, true, width, look, onTooth)
             Row(Modifier.width(width).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Right", fontSize = 11.sp, color = Brand.Faint)
+                Text("Right", fontSize = 12.sp, color = Brand.Sub)
                 Spacer(Modifier.weight(1f))
                 Text("Upper  ·  Lower", fontSize = 11.sp, color = Brand.Sub, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
-                Text("Left", fontSize = 11.sp, color = Brand.Faint)
+                Text("Left", fontSize = 12.sp, color = Brand.Sub)
             }
             TeethArch(lowerArch, false, width, look, onTooth)
         }

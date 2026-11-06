@@ -397,7 +397,7 @@ fun AppearanceRow() {
             AppTheme.set(context, modes[labels.indexOf(label)])
         }
         Text(
-            "Auto follows your phone's setting", fontSize = 11.sp, color = Brand.Faint,
+            "Auto follows your phone's setting", fontSize = 12.sp, color = Brand.Sub,
             modifier = Modifier.padding(start = 10.dp, top = 6.dp, bottom = 6.dp)
         )
     }

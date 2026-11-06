@@ -359,7 +359,7 @@ private fun DoctorRow(d: Doctor, onClick: () -> Unit) {
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (d.main) Pill("Main", Brand.GoldSoft, Brand.GoldDeep)
-                if (d.visiting) Pill("Visiting", Color(0xFFE8F0FF), Color(0xFF2F6FED))
+                if (d.visiting) Pill("Visiting", Brand.Soft, Brand.Slate)
                 Pill(
                     if (d.onBills) "On bills" else "Not on bills",
                     if (d.onBills) Brand.GreenSoft else Brand.Soft,

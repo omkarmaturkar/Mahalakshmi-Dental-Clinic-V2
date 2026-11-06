@@ -686,7 +686,7 @@ private fun MetricCard(
         }
         Spacer(Modifier.height(6.dp))
         Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub, fontSize = 12.sp, color = Brand.Faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sub, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -772,7 +772,7 @@ fun PatientPickerDialog(db: ClinicDb, title: String, onDismiss: () -> Unit, onPi
             Modifier.padding(16.dp).widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 620.dp)
                 .clip(RoundedCornerShape(28.dp)).background(Brand.Surface).padding(20.dp)
         ) {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink)
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text("Choose the patient", fontSize = 13.sp, color = Brand.Sub)
             Spacer(Modifier.height(12.dp))
             Row(

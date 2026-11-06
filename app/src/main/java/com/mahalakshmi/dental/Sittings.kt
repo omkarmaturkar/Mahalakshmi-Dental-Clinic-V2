@@ -316,7 +316,7 @@ fun TreatmentProgress(db: ClinicDb, patientId: Long) {
                 Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
                     .background(Brand.Surface).padding(22.dp)
             ) {
-                Text("Track in sittings", fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink)
+                Text("Track in sittings", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
                 Text("Choose the treatment. You can rename the sittings afterwards.", fontSize = 13.sp, color = Brand.Sub)
                 Spacer(Modifier.height(10.dp))
                 others.forEach { t ->

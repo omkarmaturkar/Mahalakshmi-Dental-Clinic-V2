@@ -312,7 +312,7 @@ private fun PinDialog(
         ) {
             Text(
                 if (confirmTwice && first != null) "Enter the same PIN again" else title,
-                fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, textAlign = TextAlign.Center
+                fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(4.dp))
             Text(

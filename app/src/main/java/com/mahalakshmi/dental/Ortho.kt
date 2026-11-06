@@ -876,7 +876,7 @@ private fun OrthoTitle(text: String) {
 @Composable
 private fun OrthoStep(label: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(36.dp).clip(CircleShape).background(Brand.Soft).clickable(onClick = onClick),
+        Modifier.size(44.dp).clip(CircleShape).background(Brand.Soft).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Text(label, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Brand.Ink) }
 }

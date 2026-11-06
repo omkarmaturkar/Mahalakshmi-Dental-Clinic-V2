@@ -105,7 +105,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
             }
             if (appVersion.isNotBlank()) {
                 Spacer(Modifier.height(10.dp))
-                Text("Version $appVersion", fontSize = 11.sp, color = Brand.Faint, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("Version $appVersion", fontSize = 12.sp, color = Brand.Sub, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
     }
@@ -142,7 +142,7 @@ private fun MenuItem(
 @Composable
 private fun MenuHeading(text: String) {
     Text(
-        text.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Brand.Faint,
+        text.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Brand.Sub,
         letterSpacing = 1.2.sp, modifier = Modifier.padding(start = 14.dp, top = 18.dp, bottom = 6.dp)
     )
 }
