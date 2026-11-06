@@ -113,4 +113,74 @@ jobs:
           ])
           edit("Trial.kt", [
               ('"Trial period has ended", fontSize = 22.sp, fontWeight = FontWeight.Bold,',
-               '"Trial
+               '"Trial period has ended", fontFamily = DisplayFont, fontSize = 28.sp, fontWeight = FontWeight.SemiBold,'),
+          ])
+
+          # General touches for every other screen: serif titles, yellow keypad buttons, spinners
+          mine = {"Theme.kt", "TodayScreen.kt", "Menu.kt", "SplashScreen.kt", "FinanceScreen.kt",
+                  "Security.kt", "PatientScreens.kt", "TrialConfig.kt"}
+          general = [
+              ("fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink",
+               "fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink"),
+              ("fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.Ink",
+               "fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink"),
+              ("fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink",
+               "fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink"),
+              ("fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink",
+               "fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink"),
+              ("fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink",
+               "fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink"),
+              ("CircularProgressIndicator(color = Brand.GreenDeep", "CircularProgressIndicator(color = Brand.Focus"),
+              ("bg = Brand.GreenDeep, fg = Color.White", "bg = Brand.Sun, fg = Brand.OnSun"),
+          ]
+          for p in sorted(root.glob("*.kt")):
+              if p.name in mine:
+                  continue
+              lines = p.read_text(encoding="utf-8").split("\n")
+              count = 0
+              for i, line in enumerate(lines):
+                  if "fontFamily" in line:
+                      continue
+                  for old, new in general:
+                      if old in line:
+                          line = line.replace(old, new)
+                          count += 1
+                  lines[i] = line
+              if count:
+                  p.write_text("\n".join(lines), encoding="utf-8")
+                  report.append(f"ok   {p.name}: {count} general change(s)")
+          print("\n".join(report))
+          PY
+
+      - name: Graphite background while the app starts
+        run: |
+          sed -i 's|@android:color/white|#FF1C1D20|' app/src/main/res/values/themes.xml
+          cat app/src/main/res/values/themes.xml
+
+      - name: Raise the version
+        run: |
+          python3 - <<'PY'
+          import re
+          p = "app/build.gradle.kts"
+          s = open(p).read()
+          code = int(re.search(r"versionCode\s*=?\s*(\d+)", s).group(1)) + 1
+          s = re.sub(r"(versionCode\s*=?\s*)\d+", lambda m: m.group(1) + str(code), s, count=1)
+          s = re.sub(r'(versionName\s*=?\s*")[^"]*"', lambda m: m.group(1) + f'{code}.0"', s, count=1)
+          open(p, "w").write(s)
+          print("Version is now", code)
+          PY
+
+      - name: Remove the review copies and save
+        run: |
+          git rm -r -q --ignore-unmatch code-view
+          git config user.name "github-actions[bot]"
+          git config user.email "41898315+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Heritage look: finish all screens"
+          git push
+          git push origin :refs/tags/code-view-1 || true
+
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build.yml --ref main
