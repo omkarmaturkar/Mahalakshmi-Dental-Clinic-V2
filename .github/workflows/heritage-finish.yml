@@ -1,0 +1,116 @@
+name: Tool - Heritage finish (all screens)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Give the remaining screens the new look
+        run: |
+          python3 - <<'PY'
+          import re, pathlib
+          root = pathlib.Path("app/src/main/java/com/mahalakshmi/dental")
+          report = []
+
+          def edit(name, pairs):
+              p = root / name
+              if not p.exists():
+                  report.append(f"SKIP {name}: file not found")
+                  return
+              s = p.read_text(encoding="utf-8")
+              for old, new in pairs:
+                  if isinstance(old, re.Pattern):
+                      s, n = old.subn(new, s)
+                      label = old.pattern
+                  else:
+                      n = s.count(old)
+                      s = s.replace(old, new)
+                      label = old
+                  report.append(("ok   " if n else "MISS ") + name + ": " + label[:70])
+              p.write_text(s, encoding="utf-8")
+
+          edit("HomeScreen.kt", [
+              ("p.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Brand.Ink,",
+               "p.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink,"),
+              ("Text(rs(p.remaining), color = Brand.Red, fontWeight = FontWeight.Bold, fontSize = 14.sp)",
+               "Text(rs(p.remaining), color = Brand.Red, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)"),
+              ("listOf(Brand.Green.copy(alpha = 0.55f), Color.Transparent)", "listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent)"),
+              ("if (isToday) Brand.GreenDeep else Brand.GoldSoft,", "if (isToday) Brand.Accent else Brand.GoldSoft,"),
+              ("if (isToday) Color.White else Brand.GoldDeep,", "if (isToday) Brand.OnAccent else Brand.GoldDeep,"),
+              ("if (selected) Brand.GreenSoft else Color.Transparent", "if (selected) Brand.GoldSoft else Color.Transparent"),
+              ("color = if (selected) Brand.GreenText else Brand.Ink", "color = Brand.Ink"),
+              ('Text("Patients", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText,',
+               'Text("Patients", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink,'),
+          ])
+          edit("PatientsScreen.kt", [
+              ("cursorBrush = SolidColor(Brand.GreenDeep),", "cursorBrush = SolidColor(Brand.Focus),"),
+              (".border(1.dp, Brand.Line, shape).padding(horizontal = 16.dp),", ".glassEdge(shape).padding(horizontal = 16.dp),"),
+              ("Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)",
+               "Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)"),
+          ])
+          edit("ScheduleScreen.kt", [
+              (".background(HomeColors.TealSoft).padding(16.dp)", ".background(Brand.GoldSoft).padding(16.dp)"),
+              ("fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = HomeColors.TealText",
+               "fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink"),
+              ('"  ·  ${list.size}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp,',
+               '"  ·  ${list.size}", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp,'),
+              ("color = Brand.GreenText, modifier = Modifier.padding(top = 6.dp)", "color = Brand.Ink, modifier = Modifier.padding(top = 6.dp)"),
+              ("color = HomeColors.TealText, modifier = Modifier.width(66.dp)", "color = Brand.Ink, modifier = Modifier.width(66.dp)"),
+              ("bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 38.dp", "bg = Brand.Soft, tint = Brand.Ink, size = 38.dp"),
+          ])
+          edit("Sittings.kt", [
+              (re.compile(r'("\+ Track another treatment in sittings", fontSize = 13\.sp, fontWeight = FontWeight\.Medium,\s*)color = Brand\.GreenText,'),
+               r'\1color = Brand.GoldDeep,'),
+              ('"+ Add sitting", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GreenText,',
+               '"+ Add sitting", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GoldDeep,'),
+              (".clip(RoundedCornerShape(50)).background(Brand.GreenDeep)", ".clip(RoundedCornerShape(50)).background(Brand.Accent)"),
+              ("Icon(Icons.Filled.Add, null, tint = Brand.GreenDeep)", "Icon(Icons.Filled.Add, null, tint = Brand.Ink)"),
+          ])
+          edit("BackupScreen.kt", [
+              ("listOf(Brand.Green.copy(alpha = 0.5f), Color.Transparent)", "listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent)"),
+              ("Icon(AppIcons.Cloud, null, tint = Brand.GreenDeep, modifier = Modifier.size(30.dp))",
+               "Icon(AppIcons.Cloud, null, tint = Brand.Ink, modifier = Modifier.size(30.dp))"),
+              ('Text("Google Drive backup", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)',
+               'Text("Google Drive backup", color = Color.White, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)'),
+          ])
+          edit("ClinicSettings.kt", [
+              ('Pill("Visiting", Color(0xFFE8F0FF), Color(0xFF2F6FED))', 'Pill("Visiting", Brand.Soft, Brand.Ink)'),
+          ])
+          edit("Prescription.kt", [
+              ('Text("$number", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenDeep)',
+               'Text("$number", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)'),
+              ("Text(info, fontSize = 13.sp, color = Brand.GreenDeep, fontWeight = FontWeight.Medium)",
+               "Text(info, fontSize = 13.sp, color = Brand.GoldDeep, fontWeight = FontWeight.Medium)"),
+              ("background(if (removing) Brand.RedSoft else Brand.GreenSoft)", "background(if (removing) Brand.RedSoft else Brand.Soft)"),
+              ("tint = if (removing) Brand.Red else Brand.GreenDeep", "tint = if (removing) Brand.Red else Brand.GoldDeep"),
+              ("color = if (removing) Brand.Red else Brand.GreenText", "color = if (removing) Brand.Red else Brand.Ink"),
+              ("s, fontSize = 13.sp, color = Brand.GreenText, maxLines = 1,", "s, fontSize = 13.sp, color = Brand.Ink, maxLines = 1,"),
+              ("modifier = Modifier.clip(RoundedCornerShape(50)).background(Brand.GreenSoft)",
+               "modifier = Modifier.clip(RoundedCornerShape(50)).background(Brand.Soft)"),
+          ])
+          edit("DentalChart.kt", [
+              ("R.font.poppins_medium", "R.font.jost_medium"),
+              ("R.font.poppins_semibold", "R.font.jost_semibold"),
+              ("private val Picked = ToothLook(Color(0xFFE8F5D2), Color(0xFF9ED35C), Color(0xFF4A780E), Color(0xFF7DB23A), Color(0xFF5A8F12))",
+               "private val Picked = ToothLook(Color(0xFFFFF6D6), Color(0xFFFFD866), Color(0xFF8A6400), Color(0xFFE2B84A), Color(0xFF8A6400))"),
+          ])
+          edit("Perio.kt", [
+              (".background(if (hot) Brand.GreenSoft else Brand.Soft)", ".background(if (hot) Brand.GoldSoft else Brand.Soft)"),
+              ("hot -> Brand.GreenText", "hot -> Brand.Ink"),
+              ("Modifier.border(2.dp, Brand.GreenDeep, shape)", "Modifier.border(2.dp, Brand.Accent, shape)"),
+              ("bg = Brand.Surface, tint = Brand.GreenDeep, size = 44.dp", "bg = Brand.Surface, tint = Brand.Ink, size = 44.dp"),
+          ])
+          edit("PatientSheets.kt", [
+              ('Pill("Tooth $it", Brand.GreenSoft, Brand.GreenText)', 'Pill("Tooth $it", Brand.GoldSoft, Brand.GoldDeep)'),
+          ])
+          edit("Trial.kt", [
+              ('"Trial period has ended", fontSize = 22.sp, fontWeight = FontWeight.Bold,',
+               '"Trial
