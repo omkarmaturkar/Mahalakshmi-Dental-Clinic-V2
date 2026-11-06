@@ -117,11 +117,11 @@ fun ScheduleScreen(db: ClinicDb, go: (Screen) -> Unit) {
                 ) {
                     if (tomorrow > 0) {
                         Column(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Brand.GoldSoft).padding(16.dp)
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(HomeColors.TealSoft).padding(16.dp)
                         ) {
                             Text(
                                 if (tomorrow == 1) "1 patient tomorrow" else "$tomorrow patients tomorrow",
-                                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink
+                                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = HomeColors.TealText
                             )
                             Text("Tap 💬 next to each one to send a WhatsApp reminder", fontSize = 12.sp, color = Brand.Sub)
                         }
@@ -129,8 +129,8 @@ fun ScheduleScreen(db: ClinicDb, go: (Screen) -> Unit) {
                     if (bookings.isEmpty()) EmptyState("No appointments yet", "Tap \"Book\" to book a patient's visit.")
                     byDay.forEach { (day, list) ->
                         Text(
-                            dayTitle(day) + "  ·  ${list.size}", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp,
-                            color = Brand.Ink, modifier = Modifier.padding(top = 6.dp)
+                            dayTitle(day) + "  ·  ${list.size}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                            color = Brand.GreenText, modifier = Modifier.padding(top = 6.dp)
                         )
                         AppCard(Modifier.fillMaxWidth(), padding = 0.dp) {
                             list.forEachIndexed { i, b ->
@@ -191,7 +191,7 @@ private fun ScheduleRow(b: DayBooking, onOpen: () -> Unit, onRemind: () -> Unit,
     ) {
         Text(
             b.time.ifBlank { "Any time" }, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-            color = Brand.Ink, modifier = Modifier.width(66.dp)
+            color = HomeColors.TealText, modifier = Modifier.width(66.dp)
         )
         Avatar(b.name, 38.dp)
         Spacer(Modifier.width(10.dp))
@@ -203,7 +203,7 @@ private fun ScheduleRow(b: DayBooking, onOpen: () -> Unit, onRemind: () -> Unit,
             Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
         } else {
             if (b.phone.isNotBlank()) {
-                CircleIconButton(AppIcons.Chat, onRemind, bg = Brand.Soft, tint = Brand.Ink, size = 38.dp)
+                CircleIconButton(AppIcons.Chat, onRemind, bg = HomeColors.TealSoft, tint = HomeColors.Teal, size = 38.dp)
                 Spacer(Modifier.width(6.dp))
             }
             CircleIconButton(Icons.Filled.Close, onCancel, bg = Brand.Soft, tint = Brand.Faint, size = 38.dp)

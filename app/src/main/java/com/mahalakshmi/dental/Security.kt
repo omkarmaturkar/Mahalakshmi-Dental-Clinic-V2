@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -41,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -183,22 +181,6 @@ fun LockGate(content: @Composable () -> Unit) {
     }
 }
 
-/** Light status-bar icons on the dark lock screen; puts the right ones back when the app opens. */
-@Composable
-private fun LockStatusBar() {
-    val view = LocalView.current
-    DisposableEffect(Unit) {
-        val window = view.context.fragmentActivity()?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        controller?.isAppearanceLightStatusBars = false
-        controller?.isAppearanceLightNavigationBars = false
-        onDispose {
-            controller?.isAppearanceLightStatusBars = !AppTheme.dark
-            controller?.isAppearanceLightNavigationBars = !AppTheme.dark
-        }
-    }
-}
-
 @Composable
 private fun LockScreen() {
     val context = LocalContext.current
@@ -213,7 +195,6 @@ private fun LockScreen() {
         if (activity != null) askBiometric(activity, "Unlock the clinic app", false) { AppLock.unlock() }
     }
 
-    LockStatusBar()
     BackHandler { activity?.moveTaskToBack(true) }
     LaunchedEffect(Unit) {
         if (finger) {
@@ -250,28 +231,27 @@ private fun LockScreen() {
     }
 
     Column(
-        Modifier.fillMaxSize().background(Brand.Rich)
+        Modifier.fillMaxSize().background(Brand.Bg)
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } }
             .statusBarsPadding().navigationBarsPadding().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        LogoTile(60.dp)
-        Spacer(Modifier.height(14.dp))
-        Text("Mahalakshmi", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 32.sp, color = Brand.Cloud)
-        Text("Dental clinic", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Brand.Sun, letterSpacing = 1.5.sp)
-        Spacer(Modifier.height(20.dp))
+        LogoTile(64.dp)
+        Spacer(Modifier.height(18.dp))
+        Text("Enter your PIN", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Brand.Ink)
+        Spacer(Modifier.height(4.dp))
         Text(
-            note.ifBlank { "Enter your PIN" }, fontSize = 14.sp,
-            color = if (note.isBlank()) Color(0xFFA4A8AB) else Color(0xFFFF9E8F), textAlign = TextAlign.Center
+            note.ifBlank { "The clinic app is locked" }, fontSize = 13.sp,
+            color = if (note.isBlank()) Brand.Sub else Brand.Red, textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(16.dp))
-        PinDots(pin.length, Modifier.offset(x = shake.value.dp), onDark = true)
-        Spacer(Modifier.height(26.dp))
-        PinPad(onDigit = { press(it) }, onDelete = { pin = pin.dropLast(1) }, onFinger = if (finger) useFinger else null, onDark = true)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(22.dp))
+        PinDots(pin.length, Modifier.offset(x = shake.value.dp))
+        Spacer(Modifier.height(30.dp))
+        PinPad(onDigit = { press(it) }, onDelete = { pin = pin.dropLast(1) }, onFinger = if (finger) useFinger else null)
+        Spacer(Modifier.height(18.dp))
         Text(
-            "Forgot PIN?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.Sun,
+            "Forgot PIN?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenText,
             modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable {
                 when {
                     activity == null -> {}
@@ -332,8 +312,7 @@ private fun PinDialog(
         ) {
             Text(
                 if (confirmTwice && first != null) "Enter the same PIN again" else title,
-                fontFamily = DisplayFont, fontSize = 23.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink,
-                textAlign = TextAlign.Center
+                fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(4.dp))
             Text(
@@ -351,63 +330,48 @@ private fun PinDialog(
 }
 
 @Composable
-private fun PinDots(filled: Int, modifier: Modifier = Modifier, onDark: Boolean = false) {
-    val on = if (onDark) Brand.Sun else Brand.Accent
-    val off = if (onDark) Color.White.copy(alpha = 0.22f) else Brand.Line
+private fun PinDots(filled: Int, modifier: Modifier = Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
         repeat(4) { i ->
-            Box(Modifier.size(14.dp).clip(CircleShape).background(if (i < filled) on else off))
+            Box(Modifier.size(16.dp).clip(CircleShape).background(if (i < filled) Brand.GreenDeep else Brand.Line))
         }
     }
 }
 
 @Composable
-private fun PinPad(onDigit: (String) -> Unit, onDelete: () -> Unit, onFinger: (() -> Unit)?, onDark: Boolean = false) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun PinPad(onDigit: (String) -> Unit, onDelete: () -> Unit, onFinger: (() -> Unit)?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9")).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                row.forEach { d -> PadKey(d, onDark) { onDigit(d) } }
+                row.forEach { d -> PadKey(d) { onDigit(d) } }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onFinger != null) {
-                PadButton(onFinger, onDark = onDark) { FingerprintGlyph(if (onDark) Brand.Sun else Brand.Ink, 30.dp) }
+                PadButton(onFinger) { FingerprintGlyph(Brand.GreenDeep, 30.dp) }
             } else {
-                Spacer(Modifier.size(66.dp))
+                Spacer(Modifier.size(70.dp))
             }
-            PadKey("0", onDark) { onDigit("0") }
-            PadButton(onDelete, onDark = onDark) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack, "Delete",
-                    tint = if (onDark) Brand.Cloud.copy(alpha = 0.7f) else Brand.Sub, modifier = Modifier.size(24.dp)
-                )
+            PadKey("0") { onDigit("0") }
+            PadButton(onDelete) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Delete", tint = Brand.Sub, modifier = Modifier.size(24.dp))
             }
         }
     }
 }
 
 @Composable
-private fun PadKey(text: String, onDark: Boolean, onClick: () -> Unit) {
-    PadButton(onClick, filled = true, onDark = onDark) {
-        Text(
-            text, fontFamily = DisplayFont, fontSize = 30.sp, fontWeight = FontWeight.SemiBold,
-            color = if (onDark) Brand.Cloud else Brand.Ink
-        )
+private fun PadKey(text: String, onClick: () -> Unit) {
+    PadButton(onClick, filled = true) {
+        Text(text, fontSize = 26.sp, fontWeight = FontWeight.Medium, color = Brand.Ink)
     }
 }
 
 @Composable
-private fun PadButton(onClick: () -> Unit, filled: Boolean = false, onDark: Boolean = false, content: @Composable () -> Unit) {
+private fun PadButton(onClick: () -> Unit, filled: Boolean = false, content: @Composable () -> Unit) {
     Box(
-        Modifier.size(66.dp).clip(CircleShape)
-            .then(
-                when {
-                    !filled -> Modifier
-                    onDark -> Modifier.background(Color.White.copy(alpha = 0.06f))
-                        .border(1.dp, Color.White.copy(alpha = 0.14f), CircleShape)
-                    else -> Modifier.background(Brand.Soft)
-                }
-            )
+        Modifier.size(70.dp).clip(CircleShape)
+            .then(if (filled) Modifier.background(Brand.Surface).border(1.dp, Brand.Line, CircleShape) else Modifier)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { content() }
@@ -475,12 +439,12 @@ private fun AppLockDialog(onClose: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(48.dp).clip(CircleShape).background(Brand.GoldSoft), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Lock, null, tint = Brand.Ink, modifier = Modifier.size(24.dp))
+                Box(Modifier.size(48.dp).clip(CircleShape).background(Brand.GreenSoft), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Filled.Lock, null, tint = Brand.GreenDeep, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("App lock", fontFamily = DisplayFont, fontSize = 23.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
+                    Text("App lock", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
                     Text(
                         if (on) "On · PIN needed to open the app" else "Off",
                         fontSize = 13.sp, color = if (on) Brand.GreenText else Brand.Sub

@@ -2,19 +2,16 @@
 
 package com.mahalakshmi.dental
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
@@ -22,17 +19,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.DayOfWeek
@@ -78,10 +67,6 @@ fun ClinicDb.billedByDoctor(from: Long, to: Long): List<Pair<String, Double>> {
 private val periodNames = listOf("Today", "This week", "This month", "Last month")
 private const val CUSTOM = 4
 
-/** Text colours on the dark "Collected" card. */
-private val FinOnRich = Color(0xFFF2F4F1)
-private val FinRichSub = Color(0xFFA4A8AB)
-
 private fun periodRange(period: Int): Pair<Long, Long> {
     val zone = ZoneId.systemDefault()
     val now = LocalDate.now()
@@ -114,28 +99,6 @@ private fun rangeLabel(from: Long, to: Long): String {
     }
 }
 
-/** Money collected on each day of the period, for the small bar chart. */
-private class FinChart(val values: List<Double>, val from: Long, val to: Long)
-
-private fun buildChart(payments: List<PayRow>, range: Pair<Long, Long>): FinChart? {
-    val zone = ZoneId.systemDefault()
-    val startDay = Instant.ofEpochMilli(range.first).atZone(zone).toLocalDate().toEpochDay()
-    val endDay = Instant.ofEpochMilli(range.second).atZone(zone).toLocalDate().toEpochDay() - 1
-    val lastDay = minOf(endDay, todayEpochDay())
-    val count = (lastDay - startDay + 1).toInt()
-    if (count < 2 || count > 62) return null
-    val sums = DoubleArray(count)
-    payments.forEach { p ->
-        val i = (epochDayOf(p.date) - startDay).toInt()
-        if (i in 0 until count && p.amount > 0) sums[i] += p.amount
-    }
-    return FinChart(sums.toList(), startDay, lastDay)
-}
-
-private fun shortDay(day: Long): String =
-    if (day == todayEpochDay()) "Today"
-    else LocalDate.ofEpochDay(day).format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
-
 @Composable
 fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
     val version = DataBus.version
@@ -157,89 +120,56 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
         .sortedByDescending { it.second }
     val doctorTotal = byDoctor.sumOf { it.second }
     val dueTotal = dues.sumOf { it.remaining }
-    val chart = remember(payments, range) { buildChart(payments, range) }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Brand.Bg)) {
         val wide = maxWidth >= 760.dp
         val side = if (wide) 24.dp else 20.dp
 
         val collectedCard: @Composable () -> Unit = {
-            RichCard(Modifier.fillMaxWidth(), padding = 22.dp) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(AppIcons.Sparkle, null, tint = Brand.Sun, modifier = Modifier.size(11.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "Collected · $periodLabel", color = Brand.Sun, fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.8.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                FinanceMoney(total, 40.sp, FinOnRich, Brand.Sun)
-                Text(if (payments.size == 1) "1 payment" else "${payments.size} payments", color = FinRichSub, fontSize = 13.sp)
-                if (chart != null) {
-                    Spacer(Modifier.height(18.dp))
-                    DayBars(chart.values, Modifier.fillMaxWidth().height(64.dp))
-                    Spacer(Modifier.height(6.dp))
-                    Row(Modifier.fillMaxWidth()) {
-                        Text(shortDay(chart.from), color = FinRichSub, fontSize = 11.sp)
-                        Spacer(Modifier.weight(1f))
-                        Text(shortDay(chart.to), color = FinRichSub, fontSize = 11.sp)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(HomeColors.Teal).padding(22.dp)) {
+                Text(
+                    "COLLECTED · ${periodLabel.uppercase()}", color = Color.White.copy(alpha = 0.75f),
+                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.2.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(rs(total), color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(
+                    if (payments.size == 1) "1 payment" else "${payments.size} payments",
+                    color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp
+                )
+                if (byMode.isNotEmpty()) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        byMode.forEach { (mode, amount) ->
+                            Text(
+                                "$mode ${rs(amount)}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                                modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.16f))
+                                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
                     }
                 }
             }
         }
         val duesCard: @Composable () -> Unit = {
             AppCard(Modifier.fillMaxWidth(), onClick = { go(Screen.Patients(filter = 1)) }, padding = 20.dp) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Pending dues", fontSize = 11.sp, color = Brand.Sub, letterSpacing = 1.sp)
-                        Spacer(Modifier.height(4.dp))
-                        val owedColor = if (dueTotal > 0.01) Brand.Red else Brand.GreenText
-                        FinanceMoney(dueTotal, 28.sp, owedColor, owedColor)
-                        Text(
-                            when {
-                                dues.isEmpty() -> "Nobody owes anything ✓"
-                                dues.size == 1 -> "1 patient"
-                                else -> "${dues.size} patients"
-                            },
-                            fontSize = 13.sp, color = Brand.Sub
-                        )
-                    }
-                    if (dues.isNotEmpty()) {
-                        Text("See who →", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GoldDeep)
-                    }
-                }
+                Text("Pending dues", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    rs(dueTotal), fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                    color = if (dueTotal > 0) HomeColors.DueRed else Brand.GreenDeep
+                )
+                Text(
+                    if (dues.isEmpty()) "Nobody owes anything ✓" else "${dues.size} patients · tap to see who owes",
+                    fontSize = 13.sp, color = Brand.Sub
+                )
             }
         }
         val modeCard: @Composable () -> Unit = {
-            FormCard("Where it came from", periodLabel) {
-                if (byMode.isEmpty()) {
-                    Text("No payments in this period", fontSize = 13.sp, color = Brand.Sub)
-                } else {
-                    Row(
-                        Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        byMode.forEachIndexed { i, (_, amount) ->
-                            val f = if (total > 0) (amount / total).toFloat() else 0f
-                            if (f > 0f) Box(Modifier.weight(f).fillMaxHeight().background(modeColor(i)))
-                        }
-                    }
-                    byMode.forEachIndexed { i, (mode, amount) ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(9.dp).clip(CircleShape).background(modeColor(i)))
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                mode, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Brand.Ink,
-                                modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
-                            if (total > 0 && amount > 0) {
-                                Text("${(amount / total * 100).toInt()}%", fontSize = 12.sp, color = Brand.Sub)
-                                Spacer(Modifier.width(10.dp))
-                            }
-                            FinanceMoney(amount, 19.sp, Brand.Ink, Brand.Sub)
-                        }
-                    }
+            FormCard("By payment mode") {
+                if (byMode.isEmpty()) Text("No payments in this period", fontSize = 13.sp, color = Brand.Sub)
+                byMode.forEach { (mode, amount) ->
+                    ShareBar(mode, rs(amount), if (total > 0) (amount / total).toFloat() else 0f, HomeColors.Teal)
                 }
             }
         }
@@ -247,7 +177,7 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
             FormCard("Treatments by doctor", "Fees of treatments started in this period") {
                 if (byDoctor.isEmpty()) Text("No treatments in this period", fontSize = 13.sp, color = Brand.Sub)
                 byDoctor.forEach { (name, amount) ->
-                    ShareBar(name, rs(amount), if (doctorTotal > 0) (amount / doctorTotal).toFloat() else 0f, Brand.Accent)
+                    ShareBar(name, rs(amount), if (doctorTotal > 0) (amount / doctorTotal).toFloat() else 0f, Brand.GreenDeep)
                 }
             }
         }
@@ -265,7 +195,7 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                p.name.ifBlank { "Deleted patient" }, fontWeight = FontWeight.Medium, fontSize = 14.sp,
+                                p.name.ifBlank { "Deleted patient" }, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                                 color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis
                             )
                             Text(
@@ -274,16 +204,16 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
                             )
                         }
                         Text(
-                            if (p.amount >= 0) "+ " + rs(p.amount) else "– " + rs(-p.amount),
+                            if (p.amount >= 0) rs(p.amount) else "– " + rs(-p.amount),
                             fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                            color = if (p.amount >= 0) Brand.GreenText else Brand.Red
+                            color = if (p.amount >= 0) Brand.GreenDeep else Brand.Red
                         )
                     }
                 }
                 if (payments.size > 15) {
                     Text(
                         if (showAll) "Show less" else "Show all ${payments.size}",
-                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GoldDeep,
+                        fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HomeColors.TealText,
                         modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { showAll = !showAll }.padding(6.dp)
                     )
                 }
@@ -292,7 +222,7 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
 
         Column(Modifier.fillMaxSize()) {
             SectionTopBar("Finance", "Collections, dues and doctors") {
-                CircleIconButton(HomeIcons.Calendar, { picking = true })
+                CircleIconButton(HomeIcons.Calendar, { picking = true }, tint = Brand.GreenDeep)
             }
             Row(
                 Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = side, vertical = 4.dp),
@@ -343,53 +273,6 @@ fun FinanceScreen(db: ClinicDb, go: (Screen) -> Unit) {
     }
 }
 
-/** Colours for the payment modes: graphite, yellow, green, then grey. */
-@Composable
-private fun modeColor(i: Int): Color = when (i) {
-    0 -> Brand.Accent
-    1 -> Brand.Sun
-    2 -> Brand.GreenDeep
-    else -> Brand.Faint
-}
-
-/** Money in the serif font with a small ₹ sign. */
-@Composable
-private fun FinanceMoney(amount: Double, size: TextUnit, color: Color, symbol: Color) {
-    val digits = remember(amount) { rs(amount).removePrefix("₹") }
-    Text(
-        buildAnnotatedString {
-            withStyle(
-                SpanStyle(fontFamily = BodyFont, fontSize = size * 0.5f, color = symbol, baselineShift = BaselineShift(0.45f))
-            ) { append("₹") }
-            append(digits)
-        },
-        fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = size, color = color, maxLines = 1
-    )
-}
-
-/** One bar per day. The last day (usually today) is yellow. */
-@Composable
-private fun DayBars(values: List<Double>, modifier: Modifier) {
-    val sun = Brand.Sun
-    val dim = Color.White.copy(alpha = 0.22f)
-    Canvas(modifier) {
-        val n = values.size
-        if (n == 0) return@Canvas
-        val max = values.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-        val gap = size.width * 0.3f / n
-        val w = (size.width - gap * (n - 1)) / n
-        values.forEachIndexed { i, v ->
-            val h = ((v / max).toFloat() * size.height).coerceAtLeast(3f)
-            drawRoundRect(
-                color = if (i == n - 1) sun else dim,
-                topLeft = Offset(i * (w + gap), size.height - h),
-                size = Size(w, h),
-                cornerRadius = CornerRadius(w / 2f, w / 2f)
-            )
-        }
-    }
-}
-
 /** Tap one date for a single day, or two dates for a range. */
 @Composable
 private fun RangePickDialog(initial: Pair<Long, Long>?, onDismiss: () -> Unit, onPick: (Long, Long) -> Unit) {
@@ -410,7 +293,7 @@ private fun RangePickDialog(initial: Pair<Long, Long>?, onDismiss: () -> Unit, o
                         onPick(minOf(from, to), maxOf(from, to))
                     }
                 }
-            ) { Text("Show", color = Brand.Focus, fontWeight = FontWeight.SemiBold) }
+            ) { Text("Show", color = Brand.GreenDeep, fontWeight = FontWeight.SemiBold) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Brand.Sub) } }
     ) {
@@ -429,7 +312,7 @@ private fun ShareBar(label: String, value: String, fraction: Float, color: Color
             Text(value, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
         }
         Spacer(Modifier.height(6.dp))
-        Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(50)).background(Brand.Soft)) {
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(Brand.Soft)) {
             Box(
                 Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight()
                     .clip(RoundedCornerShape(50)).background(color)

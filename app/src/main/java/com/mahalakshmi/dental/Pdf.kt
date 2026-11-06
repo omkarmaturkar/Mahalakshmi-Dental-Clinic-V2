@@ -742,7 +742,7 @@ fun PdfActionsDialog(
                 Icon(DocIcons.Pdf, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }
             Spacer(Modifier.height(16.dp))
-            Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text(subtitle, fontSize = 13.sp, color = Brand.Sub)
             Spacer(Modifier.height(20.dp))
             val ready = file
@@ -750,7 +750,7 @@ fun PdfActionsDialog(
                 Text("Could not create the PDF. Please try again.", fontSize = 14.sp, color = Brand.Red)
             } else if (ready == null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(color = Brand.Focus, strokeWidth = 3.dp, modifier = Modifier.size(26.dp))
+                    CircularProgressIndicator(color = Brand.GreenDeep, strokeWidth = 3.dp, modifier = Modifier.size(26.dp))
                     Spacer(Modifier.width(14.dp))
                     Text("Preparing PDF…", fontSize = 15.sp, color = Brand.Ink)
                 }

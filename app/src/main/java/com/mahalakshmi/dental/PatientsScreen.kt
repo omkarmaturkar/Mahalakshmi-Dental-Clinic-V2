@@ -121,7 +121,7 @@ private fun PatientSearchField(value: String, focus: FocusRequester, onChange: (
     val shape = RoundedCornerShape(18.dp)
     Row(
         Modifier.fillMaxWidth().height(52.dp).clip(shape).background(Brand.Surface)
-            .glassEdge(shape).padding(horizontal = 16.dp),
+            .border(1.dp, Brand.Line, shape).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Filled.Search, null, tint = Brand.Faint)
@@ -133,7 +133,7 @@ private fun PatientSearchField(value: String, focus: FocusRequester, onChange: (
                 onValueChange = onChange,
                 singleLine = true,
                 textStyle = TextStyle(fontFamily = Poppins, fontSize = 15.sp, color = Brand.Ink),
-                cursorBrush = SolidColor(Brand.Focus),
+                cursorBrush = SolidColor(Brand.GreenDeep),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus)
             )
         }
@@ -154,7 +154,7 @@ private fun DueCard(p: Patient, onOpen: () -> Unit, onRemind: () -> Unit) {
             Avatar(p.name, 46.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(p.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("Due ${rs(p.remaining)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Brand.Red)
                 if (p.lastVisit > 0L) {
                     Text("Last visit: ${relativeTime(p.lastVisit)}", fontSize = 12.sp, color = Brand.Sub)

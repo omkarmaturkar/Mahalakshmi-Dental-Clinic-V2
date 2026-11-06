@@ -72,7 +72,7 @@ private fun depthOf(k: ToothKind): Float = when (k) {
 class ToothLook(val light: Color, val deep: Color, val outline: Color, val groove: Color, val label: Color)
 
 private val Enamel = ToothLook(Color(0xFFFFFFFF), Color(0xFFEEE6D3), Color(0xFFC9BA98), Color(0xFFDACDAF), Color(0xFF8A8F8C))
-private val Picked = ToothLook(Color(0xFFFFF6D6), Color(0xFFFFD866), Color(0xFF8A6400), Color(0xFFE2B84A), Color(0xFF8A6400))
+private val Picked = ToothLook(Color(0xFFE8F5D2), Color(0xFF9ED35C), Color(0xFF4A780E), Color(0xFF7DB23A), Color(0xFF5A8F12))
 
 private fun statusLook(status: Int): ToothLook = when (status) {
     STATUS_PLANNED -> ToothLook(Color(0xFFFFEFEF), Color(0xFFF5B2B5), Color(0xFFE5484D), Color(0xFFE79AA0), Color(0xFFE5484D))
@@ -129,8 +129,8 @@ private fun TeethArch(numbers: List<Int>, upper: Boolean, width: Dp, look: (Stri
     val haptic = LocalHapticFeedback.current
     val tap by rememberUpdatedState(onTooth)
     val numberColor = Brand.Sub
-    val regular = remember { runCatching { ResourcesCompat.getFont(context, R.font.jost_medium) }.getOrNull() ?: Typeface.DEFAULT }
-    val strong = remember { runCatching { ResourcesCompat.getFont(context, R.font.jost_semibold) }.getOrNull() ?: Typeface.DEFAULT_BOLD }
+    val regular = remember { runCatching { ResourcesCompat.getFont(context, R.font.poppins_medium) }.getOrNull() ?: Typeface.DEFAULT }
+    val strong = remember { runCatching { ResourcesCompat.getFont(context, R.font.poppins_semibold) }.getOrNull() ?: Typeface.DEFAULT_BOLD }
     val w = width.value
     val rx = w / 2f - ARCH_MARGIN
     val ry = rx * 0.86f

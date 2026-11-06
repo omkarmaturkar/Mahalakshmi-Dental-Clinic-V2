@@ -389,7 +389,7 @@ fun OrthoCard(db: ClinicDb, patientId: Long) {
     AppCard(Modifier.fillMaxWidth(), onClick = { open = true }, padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Braces case", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
+                Text("Braces case", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
                 val sub = listOf(case.appliance, case.bite, case.extraction).filter { it.isNotBlank() }.joinToString(" · ")
                 Text(
                     sub.ifBlank { "Tap to fill in the diagnosis and plan" },
@@ -572,7 +572,7 @@ private fun OrthoSheet(db: ClinicDb, patientId: Long, startWithVisit: Boolean, o
                 CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, { close() }, bg = Brand.Surface, tint = Brand.Ink, size = 44.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Braces case", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink)
+                    Text("Braces case", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.Ink)
                     Text(
                         "${patient?.name.orEmpty()} · started ${fmtDate(current.startDate)}",
                         fontSize = 12.sp, color = Brand.Sub, maxLines = 1
@@ -588,7 +588,7 @@ private fun OrthoSheet(db: ClinicDb, patientId: Long, startWithVisit: Boolean, o
                 AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(current.appliance.ifBlank { "Braces" }, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
+                            Text(current.appliance.ifBlank { "Braces" }, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
                             Text(
                                 "Started ${fmtDate(current.startDate)} · tap to change", fontSize = 12.sp, color = Brand.Sub,
                                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { pickStart = true }
@@ -976,7 +976,7 @@ private fun OrthoVisitDialog(
                 .background(Brand.Surface).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(if (isNew) "Braces visit" else "Edit visit", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
+            Text(if (isNew) "Braces visit" else "Edit visit", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text("When", fontSize = 13.sp, color = Brand.Sub, fontWeight = FontWeight.Medium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 ChoiceChip("Today", day == today) { day = today }
@@ -1050,7 +1050,7 @@ private fun OrthoPayDialog(suggested: Double, onDismiss: () -> Unit, onSave: (Do
                 .background(Brand.Surface).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text("Receive payment", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
+            Text("Receive payment", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text("For the braces treatment", fontSize = 13.sp, color = Brand.Sub)
             AppField(amount, { amount = orthoMoneyText(it) }, "Amount", type = KeyboardType.Decimal, prefix = "₹ ")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

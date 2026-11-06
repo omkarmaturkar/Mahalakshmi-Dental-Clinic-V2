@@ -91,7 +91,7 @@ fun CrashReportScreen(report: String, onContinue: () -> Unit) {
             Icon(Icons.Filled.Warning, null, tint = Brand.Red, modifier = Modifier.size(28.dp))
         }
         Spacer(Modifier.height(14.dp))
-        Text("The app closed unexpectedly", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
+        Text("The app closed unexpectedly", fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
         Spacer(Modifier.height(4.dp))
         Text(
             "Your patient data is safe. Please send this report to the developer so the problem can be fixed.",

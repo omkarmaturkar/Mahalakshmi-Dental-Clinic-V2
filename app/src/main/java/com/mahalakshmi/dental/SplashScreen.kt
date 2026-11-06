@@ -8,15 +8,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -31,10 +28,9 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** The start screen: the clinic's logo on a white tile over the rich graphite, with a warm glow. */
 @Composable
 fun SplashScreen(onFinished: () -> Unit) {
-    StatusBarIcons(dark = false)
+    StatusBarIcons(dark = true)
     val logoScale = remember { Animatable(0.55f) }
     val logoAlpha = remember { Animatable(0f) }
     val shine = remember { Animatable(0f) }
@@ -64,70 +60,64 @@ fun SplashScreen(onFinished: () -> Unit) {
     }
 
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(Brand.Rich).drawBehind {
-            val r = size.minDimension * 0.85f
+        Modifier.fillMaxSize().background(Color.White).drawBehind {
             drawCircle(
-                Brush.radialGradient(listOf(Brand.Sun.copy(alpha = 0.12f), Color.Transparent), center = center, radius = r),
-                radius = r, center = center
+                Brush.radialGradient(
+                    listOf(Brand.Green.copy(alpha = 0.10f), Color.Transparent),
+                    center = center, radius = size.minDimension * 0.75f
+                ),
+                radius = size.minDimension * 0.75f, center = center
             )
         },
         contentAlignment = Alignment.Center
     ) {
         val big = maxWidth >= 600.dp
-        val tile = if (big) 220.dp else 164.dp
-        val tileShape = RoundedCornerShape(tile * 0.28f)
+        val logoSize = if (big) 250.dp else 180.dp
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
-                Modifier.size(tile)
-                    .graphicsLayer {
-                        scaleX = logoScale.value
-                        scaleY = logoScale.value
-                        alpha = logoAlpha.value
-                    }
-                    .shadow(24.dp, tileShape, ambientColor = Color(0x66000000), spotColor = Color(0x99000000))
-                    .clip(tileShape)
-                    .background(Color.White),
-                contentAlignment = Alignment.Center
+                Modifier.size(logoSize).graphicsLayer {
+                    scaleX = logoScale.value
+                    scaleY = logoScale.value
+                    alpha = logoAlpha.value
+                }
             ) {
-                Box(Modifier.size(tile * 0.8f)) {
-                    Image(
-                        painter = painterResource(R.drawable.clinic_logo),
-                        contentDescription = "Mahalakshmi Dental Clinic",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().drawWithContent {
-                            drawContent()
-                            val p = shine.value
-                            if (p > 0f && p < 1f) {
-                                val x = -size.width * 0.6f + p * size.width * 2.1f
-                                drawRect(
-                                    Brush.linearGradient(
-                                        listOf(Color.Transparent, Color.White.copy(alpha = 0.7f), Color.Transparent),
-                                        start = Offset(x, 0f), end = Offset(x + size.width * 0.45f, size.height)
-                                    )
+                Image(
+                    painter = painterResource(R.drawable.clinic_logo),
+                    contentDescription = "Mahalakshmi Dental Clinic",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().drawWithContent {
+                        drawContent()
+                        val p = shine.value
+                        if (p > 0f && p < 1f) {
+                            val x = -size.width * 0.6f + p * size.width * 2.1f
+                            drawRect(
+                                Brush.linearGradient(
+                                    listOf(Color.Transparent, Color.White.copy(alpha = 0.7f), Color.Transparent),
+                                    start = Offset(x, 0f), end = Offset(x + size.width * 0.45f, size.height)
                                 )
-                            }
-                        }
-                    )
-                    Canvas(Modifier.fillMaxSize()) {
-                        val g = glint.value
-                        if (g > 0f) {
-                            val c = Offset(size.width * 0.782f, size.height * 0.209f)
-                            val glow = size.width * 0.17f * g
-                            drawCircle(
-                                Brush.radialGradient(
-                                    listOf(Brand.Sun.copy(alpha = 0.6f * g), Color.Transparent),
-                                    center = c, radius = glow
-                                ),
-                                radius = glow, center = c
                             )
-                            rotate(degrees = 45f * g, pivot = c) {
-                                drawPath(sparklePath(c, size.width * 0.075f * g), Brand.Sun.copy(alpha = g))
-                            }
+                        }
+                    }
+                )
+                Canvas(Modifier.fillMaxSize()) {
+                    val g = glint.value
+                    if (g > 0f) {
+                        val c = Offset(size.width * 0.782f, size.height * 0.209f)
+                        val glow = size.width * 0.17f * g
+                        drawCircle(
+                            Brush.radialGradient(
+                                listOf(Brand.Gold.copy(alpha = 0.6f * g), Color.Transparent),
+                                center = c, radius = glow
+                            ),
+                            radius = glow, center = c
+                        )
+                        rotate(degrees = 45f * g, pivot = c) {
+                            drawPath(sparklePath(c, size.width * 0.075f * g), Brand.Gold.copy(alpha = g))
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(if (big) 36.dp else 30.dp))
+            Spacer(Modifier.height(if (big) 34.dp else 26.dp))
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.graphicsLayer {
@@ -136,23 +126,17 @@ fun SplashScreen(onFinished: () -> Unit) {
                 }
             ) {
                 Text(
-                    "Mahalakshmi", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold,
-                    fontSize = if (big) 50.sp else 42.sp, color = Brand.Cloud, letterSpacing = spacing.value.sp
+                    "Mahalakshmi", fontWeight = FontWeight.Bold, fontSize = if (big) 42.sp else 32.sp,
+                    color = Color(0xFF2A302E), letterSpacing = spacing.value.sp
                 )
-                Spacer(Modifier.height(6.dp))
                 Text(
-                    "Dental clinic · Gondia", fontWeight = FontWeight.Medium, fontSize = if (big) 15.sp else 12.sp,
-                    color = Brand.Sun, letterSpacing = (2f + spacing.value * 0.4f).sp
+                    "DENTAL CLINIC", fontWeight = FontWeight.SemiBold, fontSize = if (big) 16.sp else 13.sp,
+                    color = Brand.GreenDeep, letterSpacing = (4f + spacing.value * 0.6f).sp
                 )
             }
-            Spacer(Modifier.height(24.dp))
-            Box(
-                Modifier.graphicsLayer { alpha = tagAlpha.value }
-                    .width(40.dp).height(1.dp).background(Brand.Sun.copy(alpha = 0.6f))
-            )
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(20.dp))
             Text(
-                "Caring for every smile", fontSize = 14.sp, color = Color(0xFFA4A8AB),
+                "Caring for every smile", fontSize = 14.sp, color = Brand.Faint,
                 modifier = Modifier.graphicsLayer { alpha = tagAlpha.value }
             )
         }

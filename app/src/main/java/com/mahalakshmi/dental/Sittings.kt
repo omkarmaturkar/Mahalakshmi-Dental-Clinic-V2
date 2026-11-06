@@ -242,7 +242,7 @@ fun TreatmentProgress(db: ClinicDb, patientId: Long) {
             if (others.isNotEmpty()) {
                 Text(
                     "+ Track another treatment in sittings", fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                    color = Brand.GoldDeep,
+                    color = Brand.GreenText,
                     modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { picking = true }.padding(6.dp)
                 )
             }
@@ -313,7 +313,7 @@ fun TreatmentProgress(db: ClinicDb, patientId: Long) {
                 Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
                     .background(Brand.Surface).padding(22.dp)
             ) {
-                Text("Track in sittings", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink)
+                Text("Track in sittings", fontWeight = FontWeight.SemiBold, fontSize = 19.sp, color = Brand.Ink)
                 Text("Choose the treatment. You can rename the sittings afterwards.", fontSize = 13.sp, color = Brand.Sub)
                 Spacer(Modifier.height(10.dp))
                 others.forEach { t ->
@@ -332,7 +332,7 @@ fun TreatmentProgress(db: ClinicDb, patientId: Long) {
                             val tooth = toothText(t)
                             if (tooth.isNotBlank()) Text(tooth, fontSize = 12.sp, color = Brand.Sub)
                         }
-                        Icon(Icons.Filled.Add, null, tint = Brand.Ink)
+                        Icon(Icons.Filled.Add, null, tint = Brand.GreenDeep)
                     }
                 }
                 Spacer(Modifier.height(10.dp))
@@ -361,7 +361,7 @@ private fun SittingsCard(
     AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(t.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t.name, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val sub = listOf(toothText(t), doctor).filter { it.isNotBlank() }.joinToString(" · ")
                 if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -376,7 +376,7 @@ private fun SittingsCard(
         Box(Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(50)).background(Brand.Soft)) {
             Box(
                 Modifier.fillMaxWidth(if (list.isEmpty()) 0f else doneCount / list.size.toFloat()).fillMaxHeight()
-                    .clip(RoundedCornerShape(50)).background(Brand.Accent)
+                    .clip(RoundedCornerShape(50)).background(Brand.GreenDeep)
             )
         }
         Spacer(Modifier.height(14.dp))
@@ -388,7 +388,7 @@ private fun SittingsCard(
             ) { onEdit(s) }
         }
         Text(
-            "+ Add sitting", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GoldDeep,
+            "+ Add sitting", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GreenText,
             modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onAdd).padding(6.dp)
         )
         if (t.fee > 0) {
@@ -549,7 +549,7 @@ private fun SittingDoneDialog(
             Box(Modifier.size(52.dp).clip(CircleShape).background(BrandGradient), contentAlignment = Alignment.Center) {
                 Icon(Icons.Filled.Check, null, tint = Color.White)
             }
-            Text("Sitting done", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
+            Text("Sitting done", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Text("${t.name}: ${s.name}", fontSize = 14.sp, color = Brand.Sub)
             Text("When", fontSize = 13.sp, color = Brand.Sub, fontWeight = FontWeight.Medium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -600,7 +600,7 @@ private fun SittingEditDialog(
         ) {
             Text(
                 if (initial.id == 0L) "Add sitting" else "Edit sitting",
-                fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink
+                fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink
             )
             if (initial.done) Pill("Done on ${fmtDate(initial.doneAt)}", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
             AppField(name, { name = it }, "What happens at this sitting *", caps = KeyboardCapitalization.Sentences)

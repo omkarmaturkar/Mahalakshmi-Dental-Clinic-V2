@@ -55,7 +55,7 @@ fun EditPaymentDialog(
                 Text("₹", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 26.sp)
             }
             Spacer(Modifier.height(16.dp))
-            Text("Edit payment", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink)
+            Text("Edit payment", fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
             Text("Saved earlier as ${rs(abs(payment.amount))} on ${fmtDate(payment.date)}", fontSize = 13.sp, color = Brand.Sub)
             Spacer(Modifier.height(18.dp))
             AppField(

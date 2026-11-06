@@ -37,10 +37,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.layout.ContentScale
@@ -99,69 +97,36 @@ object AppTheme {
     }
 }
 
-// ───────────── Brand colours: graphite, cloud white and sunshine (Heritage look) ─────────────
+// ───────────── Brand colours (taken from your logo) ─────────────
 object Brand {
     private val d: Boolean get() = AppTheme.dark
-
-    // The three notes
-    /** Top note: the rich colour of hero cards, the start screen and dark mode.
-     *  To try another one, change only this line: Midnight 0xFF0E1626, Espresso 0xFF1F1914, Forest 0xFF0E1C18. */
-    val Rich = Color(0xFF1C1D20)
-    /** Middle note: soft cloud white. */
-    val Cloud = Color(0xFFF2F4F1)
-    /** Base note: sunshine yellow. Only for things you act on. */
-    val Sun = Color(0xFFFFC928)
-    /** Text and icons on yellow. */
-    val OnSun = Color(0xFF1C1D20)
-
-    /** Selected chips and the drawer: graphite on light pages, cloud white on dark pages. */
-    val Accent: Color get() = if (d) Cloud else Rich
-    val OnAccent: Color get() = if (d) Rich else Cloud
-    /** Typing cursor and the border of the field you are typing in. */
-    val Focus: Color get() = if (d) Sun else Rich
-
-    // Logo green: good news only (paid, done, growth)
-    val Green = Color(0xFF86BC14)
-    val GreenDeep = Color(0xFF5E9410)
-    val GreenText: Color get() = if (d) Color(0xFFA3D447) else Color(0xFF3F6A06)
-    val GreenSoft: Color get() = if (d) Color(0xFF25311A) else Color(0xFFEEF6DD)
-    val GreenLine: Color get() = if (d) Color(0xFF34452A) else Color(0xFFD9EBB8)
-
-    val Charcoal: Color get() = if (d) Cloud else Rich
+    val Green = Color(0xFF7CB518)
+    val GreenDeep = Color(0xFF5A8F12)
+    val GreenText: Color get() = if (d) Color(0xFF9CCB5A) else Color(0xFF4A780E)
+    val GreenSoft: Color get() = if (d) Color(0xFF223019) else Color(0xFFF1F7E4)
+    val GreenLine: Color get() = if (d) Color(0xFF34452A) else Color(0xFFDCEBC3)
+    val Charcoal: Color get() = if (d) Color(0xFFE6EBE8) else Color(0xFF2A302E)
     val Slate: Color get() = if (d) Color(0xFFB7BEBB) else Color(0xFF555B59)
-
-    // Sunshine family (these names used to mean gold)
-    val Gold = Sun
-    val GoldDeep: Color get() = if (d) Sun else Color(0xFF8A6400)
-    val GoldSoft: Color get() = if (d) Color(0xFF3A3218) else Color(0xFFFFF4CF)
-
-    // Pages, cards and text
-    val Bg: Color get() = if (d) Rich else Cloud
-    val Surface: Color get() = if (d) Color(0xFF27282C) else Color(0xFFFCFDFB)
-    val Ink: Color get() = if (d) Cloud else Rich
-    val Sub: Color get() = if (d) Color(0xFFA4A8AB) else Color(0xFF6B6F72)
-    val Faint: Color get() = if (d) Color(0xFF6F7377) else Color(0xFFA0A4A7)
-    val Line: Color get() = if (d) Color(0xFF36383D) else Color(0xFFE3E6E1)
-    val Soft: Color get() = if (d) Color(0xFF2E3034) else Color(0xFFE9ECE7)
-
-    // Money owed and danger
-    val Red = Color(0xFFD9483A)
-    val RedSoft: Color get() = if (d) Color(0xFF3A2220) else Color(0xFFFBE8E5)
+    val Gold = Color(0xFFF5A800)
+    val GoldDeep: Color get() = if (d) Color(0xFFF0B640) else Color(0xFF9A6A00)
+    val GoldSoft: Color get() = if (d) Color(0xFF332914) else Color(0xFFFFF5DA)
+    val Bg: Color get() = if (d) Color(0xFF0F1412) else Color(0xFFF6F7F3)
+    val Surface: Color get() = if (d) Color(0xFF1A211E) else Color.White
+    val Ink: Color get() = if (d) Color(0xFFECF0EE) else Color(0xFF1D2321)
+    val Sub: Color get() = if (d) Color(0xFFA6AFAA) else Color(0xFF69716D)
+    val Faint: Color get() = if (d) Color(0xFF6E7873) else Color(0xFFA3AAA6)
+    val Line: Color get() = if (d) Color(0xFF29312E) else Color(0xFFE9ECE6)
+    val Soft: Color get() = if (d) Color(0xFF222A27) else Color(0xFFF1F3EE)
+    val Red = Color(0xFFE5484D)
+    val RedSoft: Color get() = if (d) Color(0xFF3A1E21) else Color(0xFFFDEDED)
     val Glass = Color(0x29FFFFFF)
 
     /** Dark bars (bottom bar, messages): dark in both modes. */
-    val Night: Color get() = if (d) Color(0xFF2A2B2F) else Rich
-
-    /** The lit edge of a glass panel: bright at the top, fading towards the bottom. */
-    val GlassEdge: Brush
-        get() = if (d) Brush.verticalGradient(listOf(Color(0x47FFFFFF), Color(0x0FFFFFFF)))
-        else Brush.verticalGradient(listOf(Color.White, Color(0x241C1D20)))
+    val Night: Color get() = if (d) Color(0xFF242C28) else Color(0xFF2A302E)
 }
 
-/** Logo green: money received, progress bars and the avatar ring. */
-val BrandGradient: Brush = Brush.linearGradient(listOf(Color(0xFF9BCB3C), Color(0xFF5E9410)))
-/** The rich dark finish of hero cards. */
-val CharcoalGradient: Brush = Brush.linearGradient(listOf(lerp(Brand.Rich, Color.White, 0.08f), Brand.Rich))
+val BrandGradient: Brush = Brush.linearGradient(listOf(Color(0xFF8DC63F), Color(0xFF5A8F12)))
+val CharcoalGradient: Brush = Brush.linearGradient(listOf(Color(0xFF2A302E), Color(0xFF464E4B)))
 
 // ───────────── App-wide helpers ─────────────
 /** Tells every screen that data changed, so lists and totals refresh. */
@@ -177,77 +142,65 @@ object DataBus {
 /** Shows the small animated message at the top of the screen. */
 val LocalNotify = staticCompositionLocalOf<(String) -> Unit> { {} }
 
-// ───────────── Fonts & theme ─────────────
-/** Jost: clean modern text for everything you read. */
-val BodyFont = FontFamily(
-    Font(R.font.jost_regular, FontWeight.Normal),
-    Font(R.font.jost_medium, FontWeight.Medium),
-    Font(R.font.jost_semibold, FontWeight.SemiBold),
-    Font(R.font.jost_bold, FontWeight.Bold)
+// ───────────── Font & theme ─────────────
+val Poppins = FontFamily(
+    Font(R.font.poppins_regular, FontWeight.Normal),
+    Font(R.font.poppins_medium, FontWeight.Medium),
+    Font(R.font.poppins_semibold, FontWeight.SemiBold),
+    Font(R.font.poppins_bold, FontWeight.Bold)
 )
 
-/** Cormorant Garamond: the elegant serif for names, money and titles. */
-val DisplayFont = FontFamily(
-    Font(R.font.cormorant_medium, FontWeight.Medium),
-    Font(R.font.cormorant_semibold, FontWeight.SemiBold),
-    Font(R.font.cormorant_bold, FontWeight.Bold)
-)
-
-/** Old name kept so the other files keep working. It now means Jost. */
-val Poppins = BodyFont
-
-private fun TextStyle.body(): TextStyle = copy(fontFamily = BodyFont)
-private fun TextStyle.display(): TextStyle = copy(fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold)
+private fun TextStyle.poppins(): TextStyle = copy(fontFamily = Poppins)
 private val baseType = Typography()
 val AppTypography = Typography(
-    displayLarge = baseType.displayLarge.display(),
-    displayMedium = baseType.displayMedium.display(),
-    displaySmall = baseType.displaySmall.display(),
-    headlineLarge = baseType.headlineLarge.display(),
-    headlineMedium = baseType.headlineMedium.display(),
-    headlineSmall = baseType.headlineSmall.display(),
-    titleLarge = baseType.titleLarge.body(),
-    titleMedium = baseType.titleMedium.body(),
-    titleSmall = baseType.titleSmall.body(),
-    bodyLarge = baseType.bodyLarge.body(),
-    bodyMedium = baseType.bodyMedium.body(),
-    bodySmall = baseType.bodySmall.body(),
-    labelLarge = baseType.labelLarge.body(),
-    labelMedium = baseType.labelMedium.body(),
-    labelSmall = baseType.labelSmall.body()
+    displayLarge = baseType.displayLarge.poppins(),
+    displayMedium = baseType.displayMedium.poppins(),
+    displaySmall = baseType.displaySmall.poppins(),
+    headlineLarge = baseType.headlineLarge.poppins(),
+    headlineMedium = baseType.headlineMedium.poppins(),
+    headlineSmall = baseType.headlineSmall.poppins(),
+    titleLarge = baseType.titleLarge.poppins(),
+    titleMedium = baseType.titleMedium.poppins(),
+    titleSmall = baseType.titleSmall.poppins(),
+    bodyLarge = baseType.bodyLarge.poppins(),
+    bodyMedium = baseType.bodyMedium.poppins(),
+    bodySmall = baseType.bodySmall.poppins(),
+    labelLarge = baseType.labelLarge.poppins(),
+    labelMedium = baseType.labelMedium.poppins(),
+    labelSmall = baseType.labelSmall.poppins()
 )
 
 @Composable
 fun ClinicTheme(content: @Composable () -> Unit) {
     val scheme = if (AppTheme.dark) {
         darkColorScheme(
-            primary = Brand.Sun, onPrimary = Brand.OnSun,
-            primaryContainer = Brand.GoldSoft, onPrimaryContainer = Brand.Sun,
-            secondary = Brand.Cloud, onSecondary = Brand.Rich,
-            secondaryContainer = Brand.Soft, onSecondaryContainer = Brand.Ink,
-            tertiary = Brand.Green, onTertiary = Brand.Rich,
+            primary = Brand.GreenDeep, onPrimary = Color.White,
+            primaryContainer = Brand.GreenSoft, onPrimaryContainer = Brand.GreenText,
+            secondary = Brand.GreenText, onSecondary = Color.Black,
+            secondaryContainer = Brand.GreenSoft, onSecondaryContainer = Brand.GreenText,
+            tertiary = Brand.Gold,
             background = Brand.Bg, onBackground = Brand.Ink,
             surface = Brand.Surface, onSurface = Brand.Ink,
             surfaceVariant = Brand.Soft, onSurfaceVariant = Brand.Sub,
             surfaceContainerLowest = Brand.Surface, surfaceContainerLow = Brand.Surface,
             surfaceContainer = Brand.Surface, surfaceContainerHigh = Brand.Surface,
             surfaceContainerHighest = Brand.Soft,
-            outline = Color(0xFF45474D), outlineVariant = Brand.Line, error = Brand.Red
+            outline = Color(0xFF3A4541), outlineVariant = Brand.Line, error = Brand.Red
         )
     } else {
         lightColorScheme(
-            primary = Brand.Rich, onPrimary = Brand.Cloud,
-            primaryContainer = Brand.GoldSoft, onPrimaryContainer = Brand.Rich,
-            secondary = Brand.Rich, onSecondary = Brand.Cloud,
-            secondaryContainer = Brand.Soft, onSecondaryContainer = Brand.Ink,
-            tertiary = Brand.GreenDeep, onTertiary = Color.White,
+            primary = Brand.GreenDeep, onPrimary = Color.White,
+            primaryContainer = Brand.GreenSoft, onPrimaryContainer = Brand.GreenText,
+            secondary = Brand.Charcoal, onSecondary = Color.White,
+            secondaryContainer = Brand.GreenSoft, onSecondaryContainer = Brand.GreenText,
+            tertiary = Brand.Gold,
             background = Brand.Bg, onBackground = Brand.Ink,
-            surface = Brand.Surface, onSurface = Brand.Ink,
+            surface = Color.White, onSurface = Brand.Ink,
             surfaceVariant = Brand.Soft, onSurfaceVariant = Brand.Sub,
-            surfaceContainerLowest = Brand.Surface, surfaceContainerLow = Brand.Surface,
-            surfaceContainer = Brand.Surface, surfaceContainerHigh = Brand.Surface,
+            surfaceContainerLowest = Color.White, surfaceContainerLow = Color.White,
+            surfaceContainer = Color.White, surfaceContainerHigh = Color.White,
             surfaceContainerHighest = Brand.Soft,
-            outline = Color(0xFFD3D7D1), outlineVariant = Brand.Line, error = Brand.Red
+            outline = Color(0xFFD8DDD5), outlineVariant = Brand.Line, error = Brand.Red
         )
     }
     MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
@@ -416,7 +369,6 @@ fun ThemeToggle(size: Dp = 46.dp) {
             .shadow(4.dp, CircleShape, ambientColor = Color(0x1A000000), spotColor = Color(0x22000000))
             .clip(CircleShape)
             .background(Brand.Surface)
-            .glassEdge(CircleShape)
             .clickable { AppTheme.set(context, if (dark) AppTheme.LIGHT else AppTheme.DARK) },
         contentAlignment = Alignment.Center
     ) {
@@ -451,32 +403,6 @@ fun AppearanceRow() {
     }
 }
 
-// ───────────── Glass helpers ─────────────
-/** The lit edge of a glass panel: bright at the top, fading towards the bottom. */
-fun Modifier.glassEdge(shape: Shape, width: Dp = 1.dp): Modifier = this.border(width, Brand.GlassEdge, shape)
-
-/** The rich dark panel for the most important thing on a page, like the next patient. */
-@Composable
-fun RichCard(
-    modifier: Modifier = Modifier,
-    padding: Dp = 20.dp,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    val shape = RoundedCornerShape(28.dp)
-    Column(
-        modifier
-            .then(
-                if (AppTheme.dark) Modifier
-                else Modifier.shadow(14.dp, shape, ambientColor = Color(0x331C1D20), spotColor = Color(0x4D1C1D20))
-            )
-            .clip(shape)
-            .background(if (AppTheme.dark) lerp(Brand.Rich, Color.White, 0.07f) else Brand.Rich)
-            .border(1.dp, Brush.verticalGradient(listOf(Color(0x47FFFFFF), Color(0x0AFFFFFF))), shape)
-            .padding(padding),
-        content = content
-    )
-}
-
 // ───────────── Building blocks ─────────────
 @Composable
 fun AppCard(
@@ -492,13 +418,10 @@ fun AppCard(
     Column(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .then(
-                if (AppTheme.dark) Modifier
-                else Modifier.shadow(5.dp, shape, ambientColor = Color(0x0F1C1D20), spotColor = Color(0x1A1C1D20))
-            )
+            .shadow(6.dp, shape, ambientColor = Color(0x14000000), spotColor = Color(0x1F000000))
             .clip(shape)
             .background(Brand.Surface)
-            .glassEdge(shape)
+            .border(1.dp, Brand.Line, shape)
             .then(
                 if (onClick != null) Modifier.clickable(
                     interactionSource = interaction, indication = LocalIndication.current, onClick = onClick
@@ -534,24 +457,23 @@ fun BrandRow(compact: Boolean = false) {
         LogoTile(if (compact) 46.dp else 54.dp)
         Spacer(Modifier.width(12.dp))
         Column {
+            Text("Mahalakshmi", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Brand.Charcoal, lineHeight = 22.sp)
             Text(
-                "Mahalakshmi", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp,
-                color = Brand.Ink, lineHeight = 25.sp
-            )
-            Text(
-                "Dental clinic", fontWeight = FontWeight.Medium, fontSize = 11.sp,
-                color = Brand.GoldDeep, letterSpacing = 1.5.sp, lineHeight = 14.sp
+                "DENTAL CLINIC", fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
+                color = Brand.GreenDeep, letterSpacing = 2.sp, lineHeight = 14.sp
             )
         }
     }
 }
 
 private val avatarColors = listOf(
-    Color(0xFFFFF1C7) to Color(0xFF7A5A00),
-    Color(0xFFE8F2D6) to Color(0xFF3F6A06),
-    Color(0xFFE6E8EC) to Color(0xFF2A2C31),
-    Color(0xFFF3E6DA) to Color(0xFF7A4A24),
-    Color(0xFFE3ECF2) to Color(0xFF2E4A5E)
+    Color(0xFFE6F3D3) to Color(0xFF4A780E),
+    Color(0xFFE0EEFF) to Color(0xFF2357C6),
+    Color(0xFFEDE7FF) to Color(0xFF6A43C9),
+    Color(0xFFFFE8DC) to Color(0xFFC2541B),
+    Color(0xFFFFE3EA) to Color(0xFFC0315A),
+    Color(0xFFFFF1CC) to Color(0xFFA16207),
+    Color(0xFFE3E7E5) to Color(0xFF3D4442)
 )
 
 @Composable
@@ -564,7 +486,7 @@ fun Avatar(name: String, size: Dp = 48.dp, ring: Boolean = false) {
         .joinToString("") { it.take(1).uppercase() }.ifBlank { "?" }
     Box(
         Modifier.size(size)
-            .then(if (ring) Modifier.border(2.dp, Brand.Sun, CircleShape).padding(5.dp) else Modifier)
+            .then(if (ring) Modifier.border(3.dp, BrandGradient, CircleShape).padding(5.dp) else Modifier)
             .clip(CircleShape)
             .background(bg),
         contentAlignment = Alignment.Center
@@ -590,9 +512,9 @@ fun Pill(text: String, bg: Color, fg: Color, icon: ImageVector? = null, modifier
 @Composable
 fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Icon(AppIcons.Sparkle, null, tint = Brand.Gold, modifier = Modifier.size(13.dp))
+        Icon(AppIcons.Sparkle, null, tint = Brand.Gold, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(8.dp))
-        Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
+        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.GreenText)
     }
 }
 
@@ -604,7 +526,6 @@ fun IconBadge(icon: ImageVector, tint: Color, bg: Color, size: Dp = 44.dp) {
     ) { Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.5f)) }
 }
 
-/** The main button: sunshine yellow with graphite text. (Old name kept so the other files keep working.) */
 @Composable
 fun GradientButton(
     text: String,
@@ -614,33 +535,32 @@ fun GradientButton(
     height: Dp = 56.dp,
     onClick: () -> Unit
 ) {
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(18.dp)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.96f else 1f, label = "buttonPress")
-    val off = if (AppTheme.dark) Color(0xFF3A3C41) else Color(0xFFDADDD7)
-    val fg = if (enabled) Brand.OnSun else Brand.Sub
+    val off = if (AppTheme.dark) Color(0xFF39413D) else Color(0xFFCFD5CC)
     Row(
         modifier.height(height)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(
                 if (enabled) Modifier.shadow(
-                    10.dp, shape,
-                    ambientColor = Brand.Sun.copy(alpha = 0.35f), spotColor = Brand.Sun.copy(alpha = 0.55f)
+                    12.dp, shape,
+                    ambientColor = Brand.Green.copy(alpha = 0.35f), spotColor = Brand.GreenDeep.copy(alpha = 0.45f)
                 ) else Modifier
             )
             .clip(shape)
-            .background(if (enabled) Brand.Sun else off)
+            .background(if (enabled) BrandGradient else SolidColor(off))
             .clickable(interactionSource = interaction, indication = LocalIndication.current, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(20.dp))
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(text, color = fg, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1)
+        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1)
     }
 }
 
@@ -649,8 +569,8 @@ fun SoftButton(
     text: String,
     icon: ImageVector?,
     modifier: Modifier = Modifier,
-    bg: Color = Brand.Soft,
-    fg: Color = Brand.Ink,
+    bg: Color = Brand.GreenSoft,
+    fg: Color = Brand.GreenText,
     height: Dp = 52.dp,
     onClick: () -> Unit
 ) {
@@ -660,7 +580,7 @@ fun SoftButton(
     Row(
         modifier.height(height)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(RoundedCornerShape(50)).background(bg)
+            .clip(RoundedCornerShape(16.dp)).background(bg)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -682,40 +602,36 @@ fun CircleIconButton(
     tint: Color = Brand.Ink,
     size: Dp = 46.dp
 ) {
-    val plain = bg == Brand.Surface
     Box(
         Modifier.size(size)
             .then(
-                if (plain) Modifier.shadow(
-                    4.dp, CircleShape, ambientColor = Color(0x141C1D20), spotColor = Color(0x1F1C1D20)
+                if (bg == Brand.Surface) Modifier.shadow(
+                    4.dp, CircleShape, ambientColor = Color(0x1A000000), spotColor = Color(0x22000000)
                 ) else Modifier
             )
-            .clip(CircleShape).background(bg)
-            .then(if (plain) Modifier.glassEdge(CircleShape) else Modifier)
-            .clickable(onClick = onClick),
+            .clip(CircleShape).background(bg).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp)) }
 }
 
-/** Floating main button: sunshine yellow with graphite text. */
 @Composable
 fun GradientFab(text: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(50)
+    val shape = RoundedCornerShape(20.dp)
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.95f else 1f, label = "fabPress")
     Row(
         modifier.height(60.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(14.dp, shape, ambientColor = Brand.Sun.copy(alpha = 0.4f), spotColor = Brand.Sun.copy(alpha = 0.6f))
-            .clip(shape).background(Brand.Sun)
+            .shadow(16.dp, shape, ambientColor = Brand.Green.copy(alpha = 0.5f), spotColor = Brand.GreenDeep.copy(alpha = 0.6f))
+            .clip(shape).background(BrandGradient)
             .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
             .padding(horizontal = 24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = Brand.OnSun)
+        Icon(icon, null, tint = Color.White)
         Spacer(Modifier.width(8.dp))
-        Text(text, color = Brand.OnSun, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     }
 }
 
@@ -724,12 +640,11 @@ fun ChoiceChip(
     text: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
-    selectedBg: Color = Brand.Accent,
+    selectedBg: Color = Brand.GreenDeep,
     onClick: () -> Unit
 ) {
-    val selectedFg = if (selectedBg == Brand.Accent) Brand.OnAccent else Color.White
     val bg by animateColorAsState(if (selected) selectedBg else Brand.Surface, label = "chipBg")
-    val fg by animateColorAsState(if (selected) selectedFg else Brand.Ink, label = "chipFg")
+    val fg by animateColorAsState(if (selected) Color.White else Brand.Ink, label = "chipFg")
     val shape = RoundedCornerShape(50)
     Row(
         modifier.clip(shape).background(bg)
@@ -739,7 +654,7 @@ fun ChoiceChip(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (selected) {
-            Icon(Icons.Filled.Check, null, tint = selectedFg, modifier = Modifier.size(15.dp))
+            Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(5.dp))
         }
         Text(text, color = fg, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
@@ -754,7 +669,7 @@ fun Segmented(options: List<String>, selected: String, onSelect: (String) -> Uni
             val bg by animateColorAsState(if (isSelected) Brand.Surface else Color.Transparent, label = "segment")
             Box(
                 Modifier.weight(1f).height(46.dp)
-                    .then(if (isSelected) Modifier.shadow(2.dp, RoundedCornerShape(12.dp)) else Modifier)
+                    .then(if (isSelected) Modifier.shadow(3.dp, RoundedCornerShape(12.dp)) else Modifier)
                     .clip(RoundedCornerShape(12.dp)).background(bg)
                     .clickable { onSelect(option) },
                 contentAlignment = Alignment.Center
@@ -762,7 +677,7 @@ fun Segmented(options: List<String>, selected: String, onSelect: (String) -> Uni
                 Text(
                     option, fontSize = 14.sp,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) Brand.Ink else Brand.Sub
+                    color = if (isSelected) Brand.GreenText else Brand.Sub
                 )
             }
         }
@@ -793,10 +708,10 @@ fun AppField(
         shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Brand.Ink, unfocusedTextColor = Brand.Ink,
-            focusedBorderColor = Brand.Focus, unfocusedBorderColor = Brand.Line,
-            focusedLabelColor = Brand.Focus, cursorColor = Brand.Focus,
+            focusedBorderColor = Brand.GreenDeep, unfocusedBorderColor = Brand.Line,
+            focusedLabelColor = Brand.GreenDeep, cursorColor = Brand.GreenDeep,
             focusedContainerColor = Brand.Surface,
-            unfocusedContainerColor = Brand.Surface
+            unfocusedContainerColor = if (AppTheme.dark) Brand.Surface else Color(0xFFFBFCFA)
         ),
         modifier = modifier
     )
@@ -818,8 +733,8 @@ fun SearchBox(value: String, onChange: (String) -> Unit) {
                 value = value,
                 onValueChange = onChange,
                 singleLine = true,
-                textStyle = TextStyle(fontFamily = BodyFont, fontSize = 15.sp, color = Brand.Ink),
-                cursorBrush = SolidColor(Brand.Focus),
+                textStyle = TextStyle(fontFamily = Poppins, fontSize = 15.sp, color = Brand.Ink),
+                cursorBrush = SolidColor(Brand.GreenDeep),
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -842,10 +757,7 @@ fun AppTopBar(title: String, subtitle: String?, onBack: () -> Unit, actions: @Co
     ) {
         CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, onBack)
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(
-                title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = Brand.Ink,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -873,7 +785,7 @@ fun FormCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     AppCard(modifier, padding = 22.dp) {
-        Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink)
+        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText)
         if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = Brand.Sub)
         Spacer(Modifier.height(16.dp))
         Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
@@ -886,18 +798,15 @@ fun EmptyState(title: String, message: String) {
         Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(Modifier.size(100.dp).clip(CircleShape).background(Brand.GoldSoft), contentAlignment = Alignment.Center) {
-            Icon(AppIcons.Tooth, null, tint = Brand.Charcoal, modifier = Modifier.size(52.dp))
+        Box(Modifier.size(100.dp).clip(CircleShape).background(Brand.GreenSoft), contentAlignment = Alignment.Center) {
+            Icon(AppIcons.Tooth, null, tint = Brand.Green, modifier = Modifier.size(56.dp))
             Icon(
                 AppIcons.Sparkle, null, tint = Brand.Gold,
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 14.dp, end = 14.dp).size(16.dp)
             )
         }
         Spacer(Modifier.height(16.dp))
-        Text(
-            title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp,
-            color = Brand.Ink, textAlign = TextAlign.Center
-        )
+        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink, textAlign = TextAlign.Center)
         Spacer(Modifier.height(4.dp))
         Text(message, fontSize = 14.sp, color = Brand.Sub, textAlign = TextAlign.Center)
     }
@@ -905,18 +814,18 @@ fun EmptyState(title: String, message: String) {
 
 @Composable
 fun NavItem(label: String, icon: ImageVector, active: Boolean, dot: Color? = null, onClick: () -> Unit) {
-    val bg by animateColorAsState(if (active) Brand.GoldSoft else Color.Transparent, label = "navItem")
+    val bg by animateColorAsState(if (active) Brand.GreenSoft else Color.Transparent, label = "navItem")
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(bg)
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = if (active) Brand.Ink else Brand.Sub, modifier = Modifier.size(22.dp))
+        Icon(icon, null, tint = if (active) Brand.GreenDeep else Brand.Sub, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(14.dp))
         Text(
             label, fontSize = 15.sp, modifier = Modifier.weight(1f),
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-            color = Brand.Ink
+            color = if (active) Brand.GreenText else Brand.Ink
         )
         if (dot != null) Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
     }
@@ -937,10 +846,9 @@ fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boo
             checked = checked,
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Brand.OnSun, checkedTrackColor = Brand.Sun,
-                checkedBorderColor = Color.Transparent,
+                checkedThumbColor = Color.White, checkedTrackColor = Brand.Green,
                 uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = if (AppTheme.dark) Color(0xFF45474D) else Color(0xFFD5D8D3),
+                uncheckedTrackColor = if (AppTheme.dark) Color(0xFF3A4440) else Color(0xFFD5DAD2),
                 uncheckedBorderColor = Color.Transparent
             )
         )
@@ -957,10 +865,10 @@ fun NotifyBanner(text: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(30.dp).clip(CircleShape).background(if (success) Brand.Green else Brand.Sun),
+            Modifier.size(30.dp).clip(CircleShape).background(if (success) BrandGradient else SolidColor(Brand.Gold)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(if (success) Icons.Filled.Check else AppIcons.Sparkle, null, tint = Brand.OnSun, modifier = Modifier.size(16.dp))
+            Icon(if (success) Icons.Filled.Check else AppIcons.Sparkle, null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text(text, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 14.sp)
@@ -982,16 +890,16 @@ fun ConfirmDialog(
                 .background(Brand.Surface).padding(26.dp)
         ) {
             Box(
-                Modifier.size(56.dp).clip(CircleShape).background(if (danger) Brand.RedSoft else Brand.GoldSoft),
+                Modifier.size(56.dp).clip(CircleShape).background(if (danger) Brand.RedSoft else Brand.GreenSoft),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     if (danger) Icons.Filled.Delete else Icons.Filled.Refresh, null,
-                    tint = if (danger) Brand.Red else Brand.Ink
+                    tint = if (danger) Brand.Red else Brand.GreenDeep
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text(title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 23.sp, color = Brand.Ink)
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Spacer(Modifier.height(6.dp))
             Text(message, fontSize = 14.sp, color = Brand.Sub)
             Spacer(Modifier.height(24.dp))
@@ -1017,7 +925,7 @@ fun BusyDialog(text: String) {
             Modifier.clip(RoundedCornerShape(24.dp)).background(Brand.Surface).padding(horizontal = 26.dp, vertical = 22.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CircularProgressIndicator(color = Brand.Focus, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
+            CircularProgressIndicator(color = Brand.GreenDeep, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(16.dp))
             Text(text, fontSize = 15.sp, color = Brand.Ink)
         }

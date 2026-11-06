@@ -602,7 +602,7 @@ private fun PatientHeader(
                 val c = Offset(size.width * 0.95f, 0f)
                 val r = size.width * 0.55f
                 drawCircle(
-                    Brush.radialGradient(listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent), center = c, radius = r),
+                    Brush.radialGradient(listOf(Brand.Green.copy(alpha = 0.5f), Color.Transparent), center = c, radius = r),
                     radius = r, center = c
                 )
             }.padding(18.dp),

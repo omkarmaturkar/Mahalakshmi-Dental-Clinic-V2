@@ -132,7 +132,7 @@ fun HeroCard(stats: Stats, modifier: Modifier = Modifier) {
                 val glow = Offset(size.width * 0.92f, size.height * 0.05f)
                 val r1 = size.minDimension * 0.95f
                 drawCircle(
-                    Brush.radialGradient(listOf(Brand.Sun.copy(alpha = 0.16f), Color.Transparent), center = glow, radius = r1),
+                    Brush.radialGradient(listOf(Brand.Green.copy(alpha = 0.55f), Color.Transparent), center = glow, radius = r1),
                     radius = r1, center = glow
                 )
                 val glow2 = Offset(size.width * 0.05f, size.height * 1.05f)
@@ -240,8 +240,8 @@ private fun DayPill(day: Long, today: Long) {
     val isToday = day == today
     Pill(
         fmtDay(day),
-        if (isToday) Brand.Accent else Brand.GoldSoft,
-        if (isToday) Brand.OnAccent else Brand.GoldDeep,
+        if (isToday) Brand.GreenDeep else Brand.GoldSoft,
+        if (isToday) Color.White else Brand.GoldDeep,
         Icons.Filled.DateRange
     )
 }
@@ -304,7 +304,7 @@ private fun RecentRow(p: Patient, onClick: () -> Unit) {
 fun DueBadge(p: Patient) {
     when {
         p.remaining > 0 -> Column(horizontalAlignment = Alignment.End) {
-            Text(rs(p.remaining), color = Brand.Red, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            Text(rs(p.remaining), color = Brand.Red, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text("due", color = Brand.Red.copy(alpha = 0.8f), fontSize = 11.sp)
         }
         p.totalFees > 0 -> Pill("Paid", Brand.GreenSoft, Brand.GreenText)
@@ -321,7 +321,7 @@ fun PatientCard(p: Patient, modifier: Modifier = Modifier, onClick: () -> Unit) 
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        p.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink,
+                        p.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Brand.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)
                     )
                     if (p.alerts.isNotEmpty()) {
@@ -339,7 +339,7 @@ fun PatientCard(p: Patient, modifier: Modifier = Modifier, onClick: () -> Unit) 
 
 @Composable
 private fun SidebarPatientRow(p: Patient, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val bg by animateColorAsState(if (selected) Brand.GoldSoft else Color.Transparent, label = "patientRow")
+    val bg by animateColorAsState(if (selected) Brand.GreenSoft else Color.Transparent, label = "patientRow")
     Row(
         modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(18.dp)).background(bg)
             .clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
@@ -350,7 +350,7 @@ private fun SidebarPatientRow(p: Patient, selected: Boolean, modifier: Modifier,
         Column(Modifier.weight(1f)) {
             Text(
                 p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
-                color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis
+                color = if (selected) Brand.GreenText else Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Text(patientSubtitle(p), fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -577,7 +577,7 @@ fun Sidebar(
         }
         HorizontalDivider(Modifier.padding(horizontal = 22.dp, vertical = 14.dp), color = Brand.Line)
         Row(Modifier.padding(horizontal = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Patients", fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink, modifier = Modifier.weight(1f))
+            Text("Patients", fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText, modifier = Modifier.weight(1f))
             Text("${everyone.size}", fontSize = 13.sp, color = Brand.Sub)
         }
         Spacer(Modifier.height(12.dp))

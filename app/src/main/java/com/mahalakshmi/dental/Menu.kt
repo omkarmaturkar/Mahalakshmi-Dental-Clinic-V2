@@ -1,6 +1,7 @@
 package com.mahalakshmi.dental
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -70,8 +71,8 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    clinic.name, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp,
-                    color = Brand.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 22.sp
+                    clinic.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Brand.Charcoal,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp
                 )
                 Text(
                     doctor?.title ?: "Tap to add doctors", fontSize = 12.sp, color = Brand.Sub,
@@ -93,13 +94,13 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
             AppearanceRow()
             AppLockRow()
             MenuItem("Clinic & doctors", DocIcons.Settings, active == "clinic") { onSelect(Screen.ClinicSettings) }
-            MenuItem("Backup & restore", AppIcons.Cloud, active == "backup", dot = if (backupOk) null else Brand.Sun) {
+            MenuItem("Backup & restore", AppIcons.Cloud, active == "backup", dot = if (backupOk) null else Brand.Gold) {
                 onSelect(Screen.BackupPage)
             }
         }
         HorizontalDivider(color = Brand.Line)
         Column(Modifier.padding(16.dp)) {
-            GradientButton("New patient", Modifier.fillMaxWidth(), Icons.Filled.Add, height = 50.dp) {
+            GradientButton("New Patient", Modifier.fillMaxWidth(), Icons.Filled.Add, height = 50.dp) {
                 onSelect(Screen.PatientForm())
             }
             if (appVersion.isNotBlank()) {
@@ -120,19 +121,18 @@ private fun MenuItem(
     dot: Color? = null,
     onClick: () -> Unit
 ) {
-    val activeBg = if (AppTheme.dark) Brand.Sun.copy(alpha = 0.14f) else Brand.GoldSoft
     Row(
         Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(14.dp))
-            .background(if (active) activeBg else Color.Transparent)
+            .background(if (active) Brand.GreenSoft else Color.Transparent)
             .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, null, tint = if (active) Brand.Ink else Brand.Sub, modifier = Modifier.size(22.dp))
+        Icon(icon, null, tint = if (active) Brand.GreenDeep else Brand.Sub, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(14.dp))
         Text(
             label, fontSize = 15.sp, maxLines = 1, modifier = Modifier.weight(1f),
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-            color = Brand.Ink
+            color = if (active) Brand.GreenText else Brand.Ink
         )
         if (trailing != null) Text(trailing, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = trailingColor, maxLines = 1)
         if (dot != null) Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
@@ -142,12 +142,12 @@ private fun MenuItem(
 @Composable
 private fun MenuHeading(text: String) {
     Text(
-        text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Brand.Faint,
+        text.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Brand.Faint,
         letterSpacing = 1.2.sp, modifier = Modifier.padding(start = 14.dp, top = 18.dp, bottom = 6.dp)
     )
 }
 
-/** Top bar for the main sections, with the title in the serif font. Shows the ☰ button when the menu is hidden. */
+/** Top bar for the main sections. Shows the ☰ button when the menu is hidden. */
 @Composable
 fun SectionTopBar(title: String, subtitle: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
     val openMenu = LocalMenu.current
@@ -163,10 +163,7 @@ fun SectionTopBar(title: String, subtitle: String? = null, actions: @Composable 
             Spacer(Modifier.width(8.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(
-                title, fontFamily = DisplayFont, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 30.sp,
-                color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -175,30 +172,22 @@ fun SectionTopBar(title: String, subtitle: String? = null, actions: @Composable 
     }
 }
 
-/** Bottom bar on phones: a floating glass bar with Home · Patients · + · Schedule · Finance */
+/** Bottom bar on phones: a floating dark bar with Home · Patients · Schedule · Finance */
 @Composable
 fun BottomNavBar(current: String, onSelect: (Screen) -> Unit) {
-    StatusBarIcons(dark = !AppTheme.dark)
-    val shape = RoundedCornerShape(32.dp)
+    val shape = RoundedCornerShape(30.dp)
     Box(
         Modifier.fillMaxWidth().background(Brand.Bg).navigationBarsPadding()
-            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 12.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 12.dp)
     ) {
         Row(
             Modifier.fillMaxWidth()
-                .then(
-                    if (AppTheme.dark) Modifier
-                    else Modifier.shadow(12.dp, shape, ambientColor = Color(0x1A1C1D20), spotColor = Color(0x2E1C1D20))
-                )
-                .clip(shape)
-                .background(Brand.Surface)
-                .glassEdge(shape)
-                .padding(horizontal = 6.dp, vertical = 8.dp),
+                .shadow(16.dp, shape, ambientColor = Color(0x26000000), spotColor = Color(0x40000000))
+                .clip(shape).background(Brand.Night).padding(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             NavPill("Home", HomeIcons.Home, current == "home") { onSelect(Screen.Home) }
             NavPill("Patients", HomeIcons.People, current == "patients") { onSelect(Screen.Patients()) }
-            NavAddButton { onSelect(Screen.PatientForm()) }
             NavPill("Schedule", HomeIcons.Calendar, current == "schedule") { onSelect(Screen.Schedule) }
             NavPill("Finance", HomeIcons.Rupee, current == "finance") { onSelect(Screen.Finance) }
         }
@@ -207,39 +196,18 @@ fun BottomNavBar(current: String, onSelect: (Screen) -> Unit) {
 
 @Composable
 private fun RowScope.NavPill(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
-    val pill by animateColorAsState(if (selected) Brand.Sun else Color.Transparent, label = "navPill")
-    val tint by animateColorAsState(if (selected) Brand.OnSun else Brand.Sub, label = "navTint")
-    Column(
-        Modifier.weight(1f).clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(vertical = 2.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    val weight by animateFloatAsState(if (selected) 1.9f else 1f, label = "navWeight")
+    val bg by animateColorAsState(if (selected) Brand.GreenDeep else Color.Transparent, label = "navBg")
+    Row(
+        Modifier.weight(weight).height(50.dp).clip(RoundedCornerShape(25.dp)).background(bg)
+            .clickable(onClick = onClick).padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
-        Box(
-            Modifier.width(52.dp).height(30.dp).clip(RoundedCornerShape(15.dp)).background(pill),
-            contentAlignment = Alignment.Center
-        ) { Icon(icon, label, tint = tint, modifier = Modifier.size(21.dp)) }
-        Spacer(Modifier.height(3.dp))
-        Text(
-            label, fontSize = 11.sp, maxLines = 1,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            color = if (selected) Brand.Ink else Brand.Sub
-        )
-    }
-}
-
-/** The round + in the middle of the bar: adds a new patient from any tab. */
-@Composable
-private fun RowScope.NavAddButton(onClick: () -> Unit) {
-    val dark = AppTheme.dark
-    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier.size(50.dp)
-                .shadow(10.dp, CircleShape, ambientColor = Color(0x331C1D20), spotColor = Color(0x4D1C1D20))
-                .clip(CircleShape)
-                .background(if (dark) Brand.Cloud else Brand.Rich)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Filled.Add, "New patient", tint = if (dark) Brand.Rich else Brand.Sun, modifier = Modifier.size(26.dp))
+        Icon(icon, label, tint = if (selected) Color.White else Color(0xFFB4BDB8), modifier = Modifier.size(23.dp))
+        if (selected) {
+            Spacer(Modifier.width(8.dp))
+            Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Clip)
         }
     }
 }
