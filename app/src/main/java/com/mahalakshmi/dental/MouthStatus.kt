@@ -338,7 +338,7 @@ private fun MouthChips(list: List<MouthTooth>) {
 
 // ───────────── The chart screen ─────────────
 @Composable
-private fun MouthStatusScreen(db: ClinicDb, patientId: Long, onClose: () -> Unit) {
+fun MouthStatusScreen(db: ClinicDb, patientId: Long, onClose: () -> Unit) {
     val notify = LocalNotify.current
     val version = DataBus.version
     val patient = remember { db.getPatient(patientId) }

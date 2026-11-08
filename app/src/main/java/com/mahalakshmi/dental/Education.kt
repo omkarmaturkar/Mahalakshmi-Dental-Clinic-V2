@@ -812,7 +812,7 @@ fun EducationCard(db: ClinicDb, patientId: Long) {
 
 // ───────────── The library ─────────────
 @Composable
-private fun EducationScreen(db: ClinicDb, patientId: Long, onClose: () -> Unit) {
+fun EducationScreen(db: ClinicDb, patientId: Long, onClose: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("education", Context.MODE_PRIVATE) }
     var lang by remember { mutableIntStateOf(prefs.getInt("lang", 0)) }
