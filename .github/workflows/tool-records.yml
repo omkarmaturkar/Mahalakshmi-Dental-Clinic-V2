@@ -1,4 +1,4 @@
-name: Tool - treatment records (v31)
+name: Tool - treatment records (v33)
 
 on:
   workflow_dispatch:
@@ -105,12 +105,12 @@ jobs:
                   found.append((name, hits[0], len(old), new))
 
           gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
-          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*30\s*', l)]
-          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"30\.0"\s*', l)]
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*32\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"32\.0"\s*', l)]
           if len(code) != 1:
-              problems.append('app/build.gradle.kts: the line  versionCode = 30  was not found exactly once')
+              problems.append('app/build.gradle.kts: the line  versionCode = 32  was not found exactly once')
           if len(vname) != 1:
-              problems.append('app/build.gradle.kts: the line  versionName = "30.0"  was not found exactly once')
+              problems.append('app/build.gradle.kts: the line  versionName = "32.0"  was not found exactly once')
 
           if problems:
               print('NOTHING WAS CHANGED')
@@ -122,10 +122,10 @@ jobs:
               texts[name][start:start + count] = new
           for name, lines in texts.items():
               (KT / name).write_text('\n'.join(lines), encoding='utf-8')
-          gradle[code[0]] = gradle[code[0]].replace('30', '31', 1)
-          gradle[vname[0]] = gradle[vname[0]].replace('30', '31', 1)
+          gradle[code[0]] = gradle[code[0]].replace('32', '33', 1)
+          gradle[vname[0]] = gradle[vname[0]].replace('32', '33', 1)
           GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
-          print('Changed PatientScreens.kt, Sittings.kt, ExtraTables.kt and app/build.gradle.kts (version 31)')
+          print('Changed PatientScreens.kt, Sittings.kt, ExtraTables.kt and app/build.gradle.kts (version 33)')
           PY
 
       - name: Save the changes
@@ -133,5 +133,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "v31: treatment records (one record per visit)"
+          git commit -m "v33: treatment records (one record per visit)"
           git push
