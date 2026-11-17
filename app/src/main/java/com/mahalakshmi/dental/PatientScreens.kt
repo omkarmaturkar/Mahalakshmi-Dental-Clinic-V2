@@ -101,7 +101,8 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
         map
     }
 
-    var addTreatment by remember { mutableStateOf(startAdd) }
+    var addTreatment by remember { mutableStateOf(false) }
+    var newRecord by remember { mutableStateOf(startAdd) }
     var treatmentEdit by remember { mutableStateOf<Treatment?>(null) }
     var presetTooth by remember { mutableStateOf<String?>(null) }
     var receive by remember { mutableStateOf(false) }
@@ -185,8 +186,8 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
             AppCard(Modifier.fillMaxWidth(), padding = 10.dp) {
                 Row(Modifier.fillMaxWidth()) {
                     ActionTile("Treatment", Icons.Filled.Add, Brand.GreenDeep, Brand.GreenSoft, Modifier.weight(1f)) {
-                        presetTooth = null
-                        addTreatment = true
+                        tab = 0
+                        newRecord = true
                     }
                     ActionTile("Payment", DocIcons.Receipt, Brand.GoldDeep, Brand.GoldSoft, Modifier.weight(1f)) { receive = true }
                     ActionTile("Rx", DocIcons.Pill, NeutralIcon, NeutralSoft, Modifier.weight(1f)) { go(Screen.RxForm(patientId, 0)) }
@@ -407,8 +408,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                     ) {
                         header()
                         actions()
-                        TreatmentProgress(db, patientId)
-                        treatmentsCard()
+                        TreatmentRecordsCard(db, patientId, newRecord) { newRecord = false }
                         ClinicalRecordsCard(db, patientId)
                     }
                     Column(
@@ -436,7 +436,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
                         }
                     }
                     when (tab) {
-                        0 -> { TreatmentProgress(db, patientId); treatmentsCard(); ClinicalRecordsCard(db, patientId) }
+                        0 -> { TreatmentRecordsCard(db, patientId, newRecord) { newRecord = false }; ClinicalRecordsCard(db, patientId) }
                         1 -> moneyCard()
                         2 -> rxCard()
                         3 -> photosCard()

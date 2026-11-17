@@ -183,11 +183,11 @@ private fun toothText(t: Treatment): String =
 // ───────────── In the patient file ─────────────
 /** Treatment progress: one card per treatment that is done over several sittings. */
 @Composable
-fun TreatmentProgress(db: ClinicDb, patientId: Long) {
+fun TreatmentProgress(db: ClinicDb, patientId: Long, onlyIds: Set<Long>? = null) {
     val notify = LocalNotify.current
     val version = DataBus.version
     val patient = remember(version) { db.getPatient(patientId) }
-    val treatments = remember(version) { db.treatmentsOf(patientId) }
+    val treatments = remember(version, onlyIds) { db.treatmentsOf(patientId).filter { onlyIds == null || it.id in onlyIds } }
     val sittings = remember(version) { runCatching { db.sittingsOf(patientId) }.getOrElse { emptyList() } }
     val payments = remember(version) { db.paymentsOf(patientId).associateBy { it.id } }
     val booking = remember(version) { db.nextBooking(patientId) }
@@ -215,7 +215,7 @@ fun TreatmentProgress(db: ClinicDb, patientId: Long) {
                 val list = byTreatment[t.id].orEmpty()
                 if (t.id == openId) {
                     SittingsCard(
-                        t, list, doctors[t.doctorId].orEmpty(), payments, booking,
+                        t, list, doctors[t.doctorId].orEmpty(), payments, booking, onlyIds == null,
                         onDone = { s -> finishing = t to s },
                         onEdit = { s -> editing = t to s },
                         onBook = { s -> bookReason = "${t.name}: ${s.name}" },
@@ -352,6 +352,7 @@ private fun SittingsCard(
     doctor: String,
     payments: Map<Long, Payment>,
     booking: Booking?,
+    showMoney: Boolean,
     onDone: (Sitting) -> Unit,
     onEdit: (Sitting) -> Unit,
     onBook: (Sitting) -> Unit,
@@ -394,7 +395,7 @@ private fun SittingsCard(
             "+ Add sitting", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GreenText,
             modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onAdd).padding(6.dp)
         )
-        if (t.fee > 0) {
+        if (showMoney && t.fee > 0) {
             Spacer(Modifier.height(6.dp))
             HorizontalDivider(color = Brand.Line)
             Spacer(Modifier.height(10.dp))

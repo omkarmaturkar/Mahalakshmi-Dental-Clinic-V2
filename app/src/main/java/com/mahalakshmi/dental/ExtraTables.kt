@@ -63,7 +63,10 @@ fun ClinicDb.deletePatientExtras(patientId: Long) {
 // ───────────── Tables of the clinical features ─────────────
 // Sittings, gum charts, mouth status and braces records create their own tables the first time they are used.
 
-private val FEATURE_TABLES = listOf("sittings", "perio_exams", "tooth_status", "ortho_visits", "ortho_cases")
+private val FEATURE_TABLES = listOf(
+    "sittings", "perio_exams", "tooth_status", "ortho_visits", "ortho_cases",
+    "record_items", "record_payments", "treatment_records"
+)
 
 private fun tableHasColumn(sql: SQLiteDatabase, table: String, column: String): Boolean =
     sql.rawQuery("PRAGMA table_info($table)", null).use { c ->
@@ -101,6 +104,12 @@ fun ClinicDb.removeLeftoverData() {
         }
         if (tableHasColumn(sql, "sittings", "treatment_id")) {
             sql.delete("sittings", "treatment_id NOT IN (SELECT id FROM treatments)", null)
+        }
+        if (tableHasColumn(sql, "record_items", "treatment_id")) {
+            sql.delete("record_items", "treatment_id NOT IN (SELECT id FROM treatments)", null)
+        }
+        if (tableHasColumn(sql, "record_payments", "payment_id")) {
+            sql.delete("record_payments", "payment_id NOT IN (SELECT id FROM payments)", null)
         }
         if (tableHasColumn(sql, "ortho_cases", "id")) {
             if (tableHasColumn(sql, "ortho_visits", "case_id")) {
