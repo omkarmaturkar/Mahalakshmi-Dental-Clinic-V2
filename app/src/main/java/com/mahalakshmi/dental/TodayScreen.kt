@@ -365,7 +365,7 @@ fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
                                     p.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis
                                 )
-                                Text("Last visit: ${relativeTime(p.lastVisit)}", fontSize = 12.sp, color = Brand.Sub, maxLines = 1)
+                                Text("Last visit: ${relativeTime(p.lastVisit)}", fontSize = 13.sp, color = Brand.Slate, maxLines = 1)
                             }
                             Box(
                                 Modifier.size(42.dp).clip(CircleShape).background(Brand.GreenSoft)
@@ -397,7 +397,7 @@ fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
                     )
                     val rest = words.drop(1).joinToString(" ")
                     if (rest.isNotBlank()) {
-                        Text(rest, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(rest, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 CircleIconButton(Icons.Filled.Search, { go(Screen.Patients(focusSearch = true)) })
@@ -419,12 +419,12 @@ fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(greeting(), fontSize = 14.sp, color = Brand.Sub)
+                    Text(greeting(), fontSize = 14.sp, color = Brand.Slate)
                     Text(
                         shortDoctor(data.doctorName), fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
-                    Text(dateLine, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(dateLine, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Spacer(Modifier.width(12.dp))
                 ThemeToggle()
@@ -547,7 +547,7 @@ private fun SpotlightCard(
                 SpotLabel("No patients booked", null)
                 Spacer(Modifier.height(10.dp))
                 Text("Your schedule is open", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather)
-                Text("Book a patient's next visit in a few taps", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
+                Text("Book a patient's next visit in a few taps", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)
                 Spacer(Modifier.height(16.dp))
                 GradientButton("Book appointment", Modifier.fillMaxWidth(), HomeIcons.CalendarAdd, height = 48.dp, onClick = onBook)
             }
@@ -692,7 +692,7 @@ private fun MetricCard(
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(label, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(label, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -725,7 +725,7 @@ private fun QuickTile(label: String, icon: ImageVector, modifier: Modifier, onCl
             contentAlignment = Alignment.Center
         ) { Icon(icon, null, tint = Brand.GreenDeep, modifier = Modifier.size(22.dp)) }
         Spacer(Modifier.height(6.dp))
-        Text(label, fontSize = 12.sp, color = Brand.Ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, fontSize = 13.sp, color = Brand.Ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

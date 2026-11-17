@@ -41,10 +41,10 @@ val Lato = FontFamily(
     Font(R.font.lato_bold, FontWeight.Bold)
 )
 
-/** Merriweather is one variable font file; each weight below is taken from it. */
+/** Merriweather in two fixed weights (the variable file showed only its thinnest weight on the phone). */
 val Merriweather = FontFamily(
-    Font(R.font.merriweather, FontWeight.Normal),
-    Font(R.font.merriweather, FontWeight.Bold)
+    Font(R.font.merriweather_regular, FontWeight.Normal),
+    Font(R.font.merriweather_bold, FontWeight.Bold)
 )
 
 private fun Typography.withFamily(f: FontFamily) = Typography(
@@ -211,7 +211,7 @@ fun RecentPatientsCard(db: ClinicDb, go: (Screen) -> Unit) {
                 if (r != null) {
                     val count = rows?.size ?: 0
                     val people = if (count == 1) "1 patient" else "$count patients"
-                    Text(if (r.label.isBlank()) people else "${rangeText(r)} · $people", fontSize = 12.sp, color = Brand.Sub)
+                    Text(if (r.label.isBlank()) people else "${rangeText(r)} · $people", fontSize = 13.sp, color = Brand.Slate)
                 }
             }
             CircleIconButton(
@@ -285,11 +285,11 @@ private fun SeenRow(s: SeenPatient, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                p.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink,
+                p.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink,
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Text(
-                "${s.what.ifBlank { "Visit" }} · ${seenWhen(s.time)}", fontSize = 12.sp, color = Brand.Sub,
+                "${s.what.ifBlank { "Visit" }} · ${seenWhen(s.time)}", fontSize = 13.sp, color = Brand.Slate,
                 maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
