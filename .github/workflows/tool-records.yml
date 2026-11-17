@@ -1,0 +1,137 @@
+name: Tool - treatment records (v31)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check every line, then change the files
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change: file, the lines that must be there now, the lines that replace them
+          CHANGES = [
+              ('PatientScreens.kt',
+               ['var addTreatment by remember { mutableStateOf(startAdd) }'],
+               ['    var addTreatment by remember { mutableStateOf(false) }',
+                '    var newRecord by remember { mutableStateOf(startAdd) }']),
+              ('PatientScreens.kt',
+               ['ActionTile("Treatment", Icons.Filled.Add, Brand.GreenDeep, Brand.GreenSoft, Modifier.weight(1f)) {',
+                'presetTooth = null',
+                'addTreatment = true'],
+               ['                    ActionTile("Treatment", Icons.Filled.Add, Brand.GreenDeep, Brand.GreenSoft, Modifier.weight(1f)) {',
+                '                        tab = 0',
+                '                        newRecord = true']),
+              ('PatientScreens.kt',
+               ['0 -> { TreatmentProgress(db, patientId); treatmentsCard(); ClinicalRecordsCard(db, patientId) }'],
+               ['                        0 -> { TreatmentRecordsCard(db, patientId, newRecord) { newRecord = false }; ClinicalRecordsCard(db, patientId) }']),
+              ('PatientScreens.kt',
+               ['TreatmentProgress(db, patientId)',
+                'treatmentsCard()'],
+               ['                        TreatmentRecordsCard(db, patientId, newRecord) { newRecord = false }']),
+              ('Sittings.kt',
+               ['fun TreatmentProgress(db: ClinicDb, patientId: Long) {'],
+               ['fun TreatmentProgress(db: ClinicDb, patientId: Long, onlyIds: Set<Long>? = null) {']),
+              ('Sittings.kt',
+               ['val treatments = remember(version) { db.treatmentsOf(patientId) }'],
+               ['    val treatments = remember(version, onlyIds) { db.treatmentsOf(patientId).filter { onlyIds == null || it.id in onlyIds } }']),
+              ('Sittings.kt',
+               ['t, list, doctors[t.doctorId].orEmpty(), payments, booking,'],
+               ['                        t, list, doctors[t.doctorId].orEmpty(), payments, booking, onlyIds == null,']),
+              ('Sittings.kt',
+               ['booking: Booking?,',
+                'onDone: (Sitting) -> Unit,'],
+               ['    booking: Booking?,',
+                '    showMoney: Boolean,',
+                '    onDone: (Sitting) -> Unit,']),
+              ('Sittings.kt',
+               ['if (t.fee > 0) {'],
+               ['        if (showMoney && t.fee > 0) {']),
+              ('ExtraTables.kt',
+               ['private val FEATURE_TABLES = listOf("sittings", "perio_exams", "tooth_status", "ortho_visits", "ortho_cases")'],
+               ['private val FEATURE_TABLES = listOf(',
+                '    "sittings", "perio_exams", "tooth_status", "ortho_visits", "ortho_cases",',
+                '    "record_items", "record_payments", "treatment_records"',
+                ')']),
+              ('ExtraTables.kt',
+               ['if (tableHasColumn(sql, "sittings", "treatment_id")) {',
+                'sql.delete("sittings", "treatment_id NOT IN (SELECT id FROM treatments)", null)',
+                '}'],
+               ['        if (tableHasColumn(sql, "sittings", "treatment_id")) {',
+                '            sql.delete("sittings", "treatment_id NOT IN (SELECT id FROM treatments)", null)',
+                '        }',
+                '        if (tableHasColumn(sql, "record_items", "treatment_id")) {',
+                '            sql.delete("record_items", "treatment_id NOT IN (SELECT id FROM treatments)", null)',
+                '        }',
+                '        if (tableHasColumn(sql, "record_payments", "payment_id")) {',
+                '            sql.delete("record_payments", "payment_id NOT IN (SELECT id FROM payments)", null)',
+                '        }']),
+          ]
+
+          problems = []
+          new_file = KT / 'TreatmentRecords.kt'
+          if not new_file.is_file():
+              problems.append('TreatmentRecords.kt is missing: create it first (step 2), then run this tool again')
+          elif 'fun TreatmentRecordsCard(' not in new_file.read_text(encoding='utf-8') or 'private fun txEstimatePdf(' not in new_file.read_text(encoding='utf-8'):
+              problems.append('TreatmentRecords.kt is incomplete: it needs both part 1 and part 2')
+
+          texts = {}
+          found = []
+          for name, old, new in CHANGES:
+              if name not in texts:
+                  path = KT / name
+                  texts[name] = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+                  if texts[name] is None:
+                      problems.append(name + ' was not found')
+              lines = texts[name]
+              if lines is None:
+                  continue
+              hits = [i for i in range(len(lines) - len(old) + 1)
+                      if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+              if len(hits) != 1:
+                  problems.append('%s: expected once, found %d times: %s' % (name, len(hits), ' | '.join(old)))
+              else:
+                  found.append((name, hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*30\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"30\.0"\s*', l)]
+          if len(code) != 1:
+              problems.append('app/build.gradle.kts: the line  versionCode = 30  was not found exactly once')
+          if len(vname) != 1:
+              problems.append('app/build.gradle.kts: the line  versionName = "30.0"  was not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          for name, start, count, new in sorted(found, key=lambda f: (f[0], -f[1])):
+              texts[name][start:start + count] = new
+          for name, lines in texts.items():
+              (KT / name).write_text('\n'.join(lines), encoding='utf-8')
+          gradle[code[0]] = gradle[code[0]].replace('30', '31', 1)
+          gradle[vname[0]] = gradle[vname[0]].replace('30', '31', 1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('Changed PatientScreens.kt, Sittings.kt, ExtraTables.kt and app/build.gradle.kts (version 31)')
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v31: treatment records (one record per visit)"
+          git push
