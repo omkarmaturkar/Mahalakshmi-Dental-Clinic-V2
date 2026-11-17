@@ -1,0 +1,155 @@
+name: Tool - stronger fonts (v36)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download fixed-weight Merriweather, check every line, then change the files
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys, urllib.request
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          FONT_DIR = pathlib.Path('app/src/main/res/font')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change: file, the lines that must be there now, the lines that replace them
+          CHANGES = [
+              ('HomePatients.kt',
+               ['/** Merriweather is one variable font file; each weight below is taken from it. */'],
+               ['/** Merriweather in two fixed weights (the variable file showed only its thinnest weight on the phone). */']),
+              ('HomePatients.kt',
+               ['Font(R.font.merriweather, FontWeight.Normal),'],
+               ['    Font(R.font.merriweather_regular, FontWeight.Normal),']),
+              ('HomePatients.kt',
+               ['Font(R.font.merriweather, FontWeight.Bold)'],
+               ['    Font(R.font.merriweather_bold, FontWeight.Bold)']),
+              ('HomePatients.kt',
+               ['p.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink,'],
+               ['                p.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink,']),
+              ('HomePatients.kt',
+               ['"${s.what.ifBlank { "Visit" }} · ${seenWhen(s.time)}", fontSize = 12.sp, color = Brand.Sub,'],
+               ['                "${s.what.ifBlank { "Visit" }} · ${seenWhen(s.time)}", fontSize = 13.sp, color = Brand.Slate,']),
+              ('HomePatients.kt',
+               ['Text(if (r.label.isBlank()) people else "${rangeText(r)} · $people", fontSize = 12.sp, color = Brand.Sub)'],
+               ['                    Text(if (r.label.isBlank()) people else "${rangeText(r)} · $people", fontSize = 13.sp, color = Brand.Slate)']),
+              ('TodayScreen.kt',
+               ['Text(label, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)'],
+               ['                Text(label, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)']),
+              ('TodayScreen.kt',
+               ['Text(label, fontSize = 12.sp, color = Brand.Ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)'],
+               ['        Text(label, fontSize = 13.sp, color = Brand.Ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)']),
+              ('TodayScreen.kt',
+               ['Text(greeting(), fontSize = 14.sp, color = Brand.Sub)'],
+               ['                    Text(greeting(), fontSize = 14.sp, color = Brand.Slate)']),
+              ('TodayScreen.kt',
+               ['Text(dateLine, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)'],
+               ['                    Text(dateLine, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)']),
+              ('TodayScreen.kt',
+               ['Text(rest, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)'],
+               ['                        Text(rest, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)']),
+              ('TodayScreen.kt',
+               ['Text("Book a patient\'s next visit in a few taps", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)'],
+               ['                Text("Book a patient\'s next visit in a few taps", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp)']),
+              ('TodayScreen.kt',
+               ['Text("Last visit: ${relativeTime(p.lastVisit)}", fontSize = 12.sp, color = Brand.Sub, maxLines = 1)'],
+               ['                                Text("Last visit: ${relativeTime(p.lastVisit)}", fontSize = 13.sp, color = Brand.Slate, maxLines = 1)']),
+          ]
+
+          problems = []
+
+          # Fixed-weight Merriweather from Google Fonts (normal 400 and bold 700)
+          def merriweather_links(agent):
+              headers = {'User-Agent': agent} if agent else {}
+              req = urllib.request.Request('https://fonts.googleapis.com/css?family=Merriweather:400,700', headers=headers)
+              css = urllib.request.urlopen(req, timeout=60).read().decode('utf-8')
+              links = {}
+              for block in re.findall(r'@font-face\s*\{(.*?)\}', css, re.S):
+                  w = re.search(r'font-weight:\s*(\d+)', block)
+                  u = re.search(r'url\((https://[^)]+?\.ttf)\)', block)
+                  if w and u and 'italic' not in block:
+                      if w.group(1) not in links or 'U+0000-00FF' in block:
+                          links[w.group(1)] = u.group(1)
+              return links
+
+          fonts = {}
+          try:
+              links = merriweather_links(None)
+              if '400' not in links or '700' not in links:
+                  links = merriweather_links('Mozilla/5.0 (Linux; U; Android 2.2; en-us; Nexus One Build/FRF91) '
+                                             'AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1')
+              for weight, name in (('400', 'merriweather_regular.ttf'), ('700', 'merriweather_bold.ttf')):
+                  if weight not in links:
+                      problems.append(name + ': Google Fonts gave no TTF link for weight ' + weight)
+                      continue
+                  print('Downloading', name, 'from', links[weight])
+                  data = urllib.request.urlopen(links[weight], timeout=60).read()
+                  if len(data) < 20000 or data[:4] not in (b'\x00\x01\x00\x00', b'true', b'OTTO'):
+                      problems.append(name + ': the download is not a font file')
+                  else:
+                      fonts[name] = data
+          except Exception as e:
+              problems.append('Merriweather: could not download (' + str(e) + ')')
+
+          texts = {}
+          found = []
+          for name, old, new in CHANGES:
+              if name not in texts:
+                  path = KT / name
+                  texts[name] = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+                  if texts[name] is None:
+                      problems.append(name + ' was not found')
+              lines = texts[name]
+              if lines is None:
+                  continue
+              hits = [i for i in range(len(lines) - len(old) + 1)
+                      if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+              if len(hits) != 1:
+                  problems.append('%s: expected once, found %d times: %s' % (name, len(hits), ' | '.join(old)))
+              else:
+                  found.append((name, hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*35\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"35\.0"\s*', l)]
+          if len(code) != 1:
+              problems.append('app/build.gradle.kts: the line  versionCode = 35  was not found exactly once')
+          if len(vname) != 1:
+              problems.append('app/build.gradle.kts: the line  versionName = "35.0"  was not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          for name, start, count, new in sorted(found, key=lambda f: (f[0], -f[1])):
+              texts[name][start:start + count] = new
+          for name, lines in texts.items():
+              (KT / name).write_text('\n'.join(lines), encoding='utf-8')
+          for name, data in fonts.items():
+              (FONT_DIR / name).write_bytes(data)
+          old_font = FONT_DIR / 'merriweather.ttf'
+          if old_font.exists():
+              old_font.unlink()
+          gradle[code[0]] = gradle[code[0]].replace('35', '36', 1)
+          gradle[vname[0]] = gradle[vname[0]].replace('35', '36', 1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('Fixed-weight Merriweather added, small text made larger and darker, version 36')
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v36: fixed-weight Merriweather, clearer small text on Home"
+          git push
