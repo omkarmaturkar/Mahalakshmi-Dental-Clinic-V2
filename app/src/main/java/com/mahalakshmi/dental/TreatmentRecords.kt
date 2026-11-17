@@ -8,11 +8,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -28,8 +30,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.io.File
 
-// ───────────── Treatment records (v31) ─────────────
-// One record per visit, like a job card: that visit's treatments, sittings, notes and money.
+// ───────────── Treatment records (v34) ─────────────
+// One record per visit, like a job card: that visit's teeth chart, treatments, sittings, notes and money.
 // Tables (made the first time they are needed):
 //   treatment_records  one row per record: patient, day, notes
 //   record_items       which treatment is in which record
@@ -168,6 +170,28 @@ private fun ClinicDb.saveTxNotes(recordId: Long, notes: String) {
 private fun ClinicDb.dropTxRecordIfEmpty(recordId: Long) {
     ensureTxRecords()
     writableDatabase.delete("treatment_records", "id = ? AND $TX_EMPTY", arrayOf(recordId.toString()))
+}
+
+/** Deletes a record with its treatments and their sittings. Payments stay in the patient's account. */
+private fun ClinicDb.deleteTxRecord(patientId: Long, recordId: Long) {
+    ensureTxRecords()
+    val args = arrayOf(recordId.toString())
+    val ids = mutableListOf<Long>()
+    readableDatabase.rawQuery("SELECT treatment_id FROM record_items WHERE record_id = ?", args)
+        .use { c -> while (c.moveToNext()) ids.add(c.getLong(0)) }
+    val sittings = runCatching { sittingsOf(patientId) }.getOrElse { emptyList() }
+    val sql = writableDatabase
+    sql.beginTransaction()
+    try {
+        sittings.filter { it.treatmentId in ids }.forEach { deleteSitting(it.id) }
+        ids.forEach { deleteTreatment(it) }
+        sql.delete("record_items", "record_id = ?", args)
+        sql.delete("record_payments", "record_id = ?", args)
+        sql.delete("treatment_records", "id = ?", args)
+        sql.setTransactionSuccessful()
+    } finally {
+        sql.endTransaction()
+    }
 }
 
 /** All records of a patient, newest first, with what was billed and paid for each. */
@@ -385,7 +409,7 @@ private fun TxChip(r: TxRecord) {
     else Pill("Open", Brand.GoldSoft, Brand.GoldDeep)
 }
 
-/** One record, full screen: its treatments, sittings, notes and money. */
+/** One record, full screen: its teeth chart, treatments, sittings, notes and money. */
 @Composable
 private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Boolean, onClose: () -> Unit) {
     val notify = LocalNotify.current
@@ -397,10 +421,16 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
     val doctors = remember(version) { db.doctorNames() }
     val clinicName = remember(version) { db.clinicInfo().name }
     val balance = remember(version) { accountOf(db.treatmentsOf(patientId), db.paymentsOf(patientId)).balance }
+    val statusByTooth = HashMap<String, Int>()
+    record?.treatments?.forEach { t ->
+        t.teethList.forEach { tooth -> statusByTooth[tooth] = minOf(statusByTooth[tooth] ?: STATUS_DONE, t.status) }
+    }
 
     var adding by remember { mutableStateOf(addFirst) }
+    var presetTooth by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<Treatment?>(null) }
     var askEdit by remember { mutableStateOf<Treatment?>(null) }
+    var askDelete by remember { mutableStateOf(false) }
     var notesOpen by remember { mutableStateOf(false) }
     var receive by remember { mutableStateOf(false) }
     var receiptFor by remember { mutableStateOf<Long?>(null) }
@@ -417,6 +447,20 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
         notify("${t.name}: ${statusLabel(next)} ✓")
     }
 
+    // Tap on a tooth: open the unfinished treatment on it, or add a new treatment for that tooth
+    fun openTooth(tooth: String) {
+        val onTooth = record?.treatments.orEmpty().filter { tooth in it.teethList }
+        val active = onTooth.firstOrNull { it.status != STATUS_DONE }
+        if (active != null) {
+            editing = active
+        } else if (onTooth.isNotEmpty() && record?.done == true) {
+            askEdit = onTooth.first()
+        } else {
+            presetTooth = tooth
+            adding = true
+        }
+    }
+
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(Brand.Bg)) {
             AppTopBar(record?.let { txDate(it.day) } ?: "Treatment record", patient?.name.orEmpty(), onClose) {
@@ -425,19 +469,36 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
                     Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState())
-                        .padding(start = 20.dp, end =20.dp, top = 4.dp, bottom = 28.dp).navigationBarsPadding(),
+                        .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 28.dp).navigationBarsPadding(),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     if (record == null) {
                         Text("This record is not there any more.", fontSize = 14.sp, color = Brand.Sub)
                     } else {
                         AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
-                            SectionHeader("Treatments")
-                            Spacer(Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SectionHeader("Teeth & treatments", Modifier.weight(1f))
+                                SoftButton("Add", Icons.Filled.Add, height = 40.dp) {
+                                    presetTooth = null
+                                    adding = true
+                                }
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            StatusChart(statusByTooth) { tooth -> openTooth(tooth) }
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                TxLegendDot(STATUS_PLANNED)
+                                Spacer(Modifier.width(16.dp))
+                                TxLegendDot(STATUS_ONGOING)
+                                Spacer(Modifier.width(16.dp))
+                                TxLegendDot(STATUS_DONE)
+                            }
                             if (record.treatments.isEmpty()) {
                                 Text(
-                                    "No treatments in this record yet.", fontSize = 13.sp, color = Brand.Sub,
-                                    modifier = Modifier.padding(vertical = 8.dp)
+                                    "No treatments yet. Tap a tooth above, or tap \"Add\".", fontSize = 13.sp,
+                                    color = Brand.Sub, modifier = Modifier.padding(vertical = 8.dp)
                                 )
                             } else {
                                 record.treatments.forEachIndexed { i, t ->
@@ -456,12 +517,12 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
                                         )
                                     }
                                 }
+                                Text(
+                                    if (record.done) "This visit is finished. Changing a treatment asks you first."
+                                    else "Tap a treatment to change it. Tap its status to move it to the next step.",
+                                    fontSize = 12.sp, color = Brand.Sub, modifier = Modifier.padding(top = 8.dp)
+                                )
                             }
-                            Text(
-                                "+ Add treatment", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Brand.GreenText,
-                                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp))
-                                    .clickable { adding = true }.padding(vertical = 8.dp, horizontal = 4.dp)
-                            )
                         }
                         TreatmentProgress(db, patientId, onlyIds = record.treatments.map { it.id }.toSet())
                         AppCard(Modifier.fillMaxWidth(), onClick = { notesOpen = true }, padding = 18.dp) {
@@ -500,6 +561,10 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
                                 ) { pdf = "estimate" }
                             }
                         }
+                        SoftButton(
+                            "Delete this record", Icons.Filled.Delete, Modifier.fillMaxWidth(),
+                            bg = Brand.RedSoft, fg = Brand.Red
+                        ) { askDelete = true }
                     }
                 }
             }
@@ -512,15 +577,17 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             db = db,
             patientId = patientId,
             initial = editing,
-            presetTooth = null,
+            presetTooth = presetTooth,
             onDismiss = {
                 adding = false
                 editing = null
+                presetTooth = null
             },
             onSaved = { msg ->
                 db.claimLooseTreatments(patientId, recordId)
                 adding = false
                 editing = null
+                presetTooth = null
                 DataBus.changed()
                 notify(msg)
             }
@@ -536,6 +603,27 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
                 editing = t
             },
             onDismiss = { askEdit = null }
+        )
+    }
+    if (askDelete && record != null) {
+        val date = txDate(record.day)
+        val what = when (record.treatments.size) {
+            0 -> "The visit on $date"
+            1 -> "The visit on $date and its treatment"
+            else -> "The visit on $date and its ${record.treatments.size} treatments"
+        }
+        ConfirmDialog(
+            "Delete this record?",
+            "$what will be removed from the patient file and the bill. Payments stay in the patient's account.",
+            confirmText = "Delete",
+            onConfirm = {
+                askDelete = false
+                db.deleteTxRecord(patientId, recordId)
+                DataBus.changed()
+                notify("Record deleted")
+                onClose()
+            },
+            onDismiss = { askDelete = false }
         )
     }
     if (notesOpen && record != null) {
@@ -608,6 +696,15 @@ private fun TxTreatmentRow(t: Treatment, doctor: String, locked: Boolean, onOpen
                 Pill(statusLabel(t.status), statusSoft(t.status), statusText(t.status))
             }
         }
+    }
+}
+
+@Composable
+private fun TxLegendDot(status: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(10.dp).clip(CircleShape).background(statusColor(status)))
+        Spacer(Modifier.width(5.dp))
+        Text(statusLabel(status), fontSize = 12.sp, color = Brand.Sub)
     }
 }
 
