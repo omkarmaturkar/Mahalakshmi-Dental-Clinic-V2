@@ -238,7 +238,7 @@ private fun loadHome(db: ClinicDb, context: Context): HomeData = try {
 
 // ───────────── Home page ─────────────
 @Composable
-fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
+fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
     val context = LocalContext.current
     val notify = LocalNotify.current
     val openMenu = LocalMenu.current
@@ -282,9 +282,9 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
     }
     val actions = listOf(
         HomeAction("New patient", HomeIcons.PersonAdd) { go(Screen.PatientForm()) },
-        HomeAction("Book appointment", HomeIcons.CalendarAdd) { picker = "book" },
-        HomeAction("Add treatment", HomeIcons.ClipboardAdd) { picker = "treatment" },
-        HomeAction("Record payment", HomeIcons.Wallet) { picker = "payment" }
+        HomeAction("Book", HomeIcons.CalendarAdd) { picker = "book" },
+        HomeAction("Treatment", HomeIcons.ClipboardAdd) { picker = "treatment" },
+        HomeAction("Payment", HomeIcons.Wallet) { picker = "payment" }
     )
 
     BoxWithConstraints(Modifier.fillMaxSize().background(Brand.Bg)) {
@@ -392,7 +392,7 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        words.firstOrNull() ?: data.clinicName, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                        words.firstOrNull() ?: data.clinicName, fontWeight = FontWeight.Bold, fontSize = 15.sp, fontFamily = Merriweather,
                         color = Brand.Charcoal, maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                     val rest = words.drop(1).joinToString(" ")
@@ -415,13 +415,13 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
 
             // ───── Greeting and the light / dark button ─────
             Row(
-                Modifier.fillMaxWidth().padding(start = side, end = side, top = 22.dp),
+                Modifier.fillMaxWidth().padding(start = side, end = side, top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(greeting(), fontSize = 14.sp, color = Brand.Sub)
                     Text(
-                        shortDoctor(data.doctorName), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Brand.Ink,
+                        shortDoctor(data.doctorName), fontSize = 24.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis
                     )
                     Text(dateLine, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -438,18 +438,22 @@ fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
                 ) {
                     Column(Modifier.weight(1.3f)) {
                         spotlight()
-                        recallSection()
+                        Spacer(Modifier.height(16.dp))
+                        RecentPatientsCard(db, go)
                     }
                     Column(Modifier.weight(1f)) {
                         metrics()
                         Spacer(Modifier.height(24.dp))
                         quickSection(2)
+                        recallSection()
                     }
                 }
             } else {
                 Column(Modifier.padding(start = side, end = side, top = 20.dp, bottom = 28.dp)) {
                     spotlight()
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
+                    RecentPatientsCard(db, go)
+                    Spacer(Modifier.height(14.dp))
                     metrics()
                     Spacer(Modifier.height(24.dp))
                     quickSection(4)
@@ -536,13 +540,13 @@ private fun SpotlightCard(
                     radius = r, center = c
                 )
             }
-            .padding(vertical = 20.dp)
+            .padding(vertical = 16.dp)
     ) {
         if (queue.isEmpty()) {
             Column(Modifier.padding(horizontal = 20.dp)) {
                 SpotLabel("No patients booked", null)
                 Spacer(Modifier.height(10.dp))
-                Text("Your schedule is open", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                Text("Your schedule is open", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather)
                 Text("Book a patient's next visit in a few taps", color = Color.White.copy(alpha = 0.72f), fontSize = 13.sp)
                 Spacer(Modifier.height(16.dp))
                 GradientButton("Book appointment", Modifier.fillMaxWidth(), HomeIcons.CalendarAdd, height = 48.dp, onClick = onBook)
@@ -566,7 +570,7 @@ private fun SpotlightCard(
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                b.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                                b.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis
                             )
                             Text(
@@ -679,21 +683,26 @@ private fun MetricCard(
     modifier: Modifier,
     onClick: () -> Unit
 ) {
-    AppCard(modifier, onClick = onClick, padding = 16.dp) {
+    val tint = when (valueColor) { Brand.GreenDeep -> Brand.GreenDeep; HomeColors.DueRed -> HomeColors.DueRed; else -> Brand.Slate }
+    val soft = when (valueColor) { Brand.GreenDeep -> Brand.GreenSoft; HomeColors.DueRed -> Brand.RedSoft; else -> Brand.Soft }
+    AppCard(modifier, onClick = onClick, padding = 12.dp) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Icon(icon, null, tint = Brand.Faint, modifier = Modifier.size(18.dp))
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(soft), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(label, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
 private fun HomeSectionTitle(title: String, action: String? = null, onAction: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink, modifier = Modifier.weight(1f))
+        Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = Merriweather, color = Brand.Ink, modifier = Modifier.weight(1f))
         if (action != null) {
             Text(
                 action, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenText,
@@ -705,18 +714,18 @@ private fun HomeSectionTitle(title: String, action: String? = null, onAction: ()
 
 @Composable
 private fun QuickTile(label: String, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier.clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(vertical = 4.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
-            Modifier.size(60.dp).shadow(4.dp, shape, ambientColor = Color(0x10000000), spotColor = Color(0x18000000))
+            Modifier.size(48.dp).shadow(3.dp, shape, ambientColor = Color(0x10000000), spotColor = Color(0x18000000))
                 .clip(shape).background(Brand.Surface).border(1.dp, Brand.Line, shape),
             contentAlignment = Alignment.Center
-        ) { Icon(icon, null, tint = Brand.GreenDeep, modifier = Modifier.size(26.dp)) }
-        Spacer(Modifier.height(8.dp))
-        Text(label, fontSize = 12.sp, color = Brand.Ink, textAlign = TextAlign.Center, lineHeight = 16.sp, maxLines = 2)
+        ) { Icon(icon, null, tint = Brand.GreenDeep, modifier = Modifier.size(22.dp)) }
+        Spacer(Modifier.height(6.dp))
+        Text(label, fontSize = 12.sp, color = Brand.Ink, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
