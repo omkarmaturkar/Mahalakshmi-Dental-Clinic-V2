@@ -425,4 +425,361 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
                     Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState())
-                        .padding(start = 20.dp, end =
+                        .padding(start = 20.dp, end =20.dp, top = 4.dp, bottom = 28.dp).navigationBarsPadding(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    if (record == null) {
+                        Text("This record is not there any more.", fontSize = 14.sp, color = Brand.Sub)
+                    } else {
+                        AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
+                            SectionHeader("Treatments")
+                            Spacer(Modifier.height(6.dp))
+                            if (record.treatments.isEmpty()) {
+                                Text(
+                                    "No treatments in this record yet.", fontSize = 13.sp, color = Brand.Sub,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            } else {
+                                record.treatments.forEachIndexed { i, t ->
+                                    if (i > 0) HorizontalDivider(color = Brand.Line)
+                                    key(t.id) {
+                                        TxTreatmentRow(
+                                            t, doctors[t.doctorId].orEmpty(), locked = record.done,
+                                            onOpen = {
+                                                if (record.done) {
+                                                    askEdit = t
+                                                } else {
+                                                    editing = t
+                                                }
+                                            },
+                                            onStatus = { cycleStatus(t) }
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                "+ Add treatment", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Brand.GreenText,
+                                modifier = Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp))
+                                    .clickable { adding = true }.padding(vertical = 8.dp, horizontal = 4.dp)
+                            )
+                        }
+                        TreatmentProgress(db, patientId, onlyIds = record.treatments.map { it.id }.toSet())
+                        AppCard(Modifier.fillMaxWidth(), onClick = { notesOpen = true }, padding = 18.dp) {
+                            Text("Notes", fontSize = 12.sp, color = Brand.Sub)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                record.notes.ifBlank { "Tap to add notes for this visit" }, fontSize = 14.sp,
+                                color = if (record.notes.isBlank()) Brand.Sub else Brand.Ink
+                            )
+                        }
+                        AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
+                            Row {
+                                TxMoney("Total", rs(record.billed), Brand.Ink, Modifier.weight(1f))
+                                TxMoney("Paid", rs(record.paid), Brand.GreenText, Modifier.weight(1f))
+                                TxMoney(
+                                    "Left", rs(record.left), if (record.left > 0.01) Brand.Red else Brand.GreenText,
+                                    Modifier.weight(1f)
+                                )
+                            }
+                            if (record.planned > 0.0) {
+                                Spacer(Modifier.height(8.dp))
+                                Text("To do, not billed yet: ${rs(record.planned)}", fontSize = 12.sp, color = Brand.Sub)
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                GradientButton("Receive payment", Modifier.weight(1.3f), height = 50.dp) { receive = true }
+                                SoftButton(
+                                    "Bill", DocIcons.Pdf, Modifier.weight(1f), bg = Brand.Soft, fg = Brand.Ink, height = 50.dp
+                                ) { pdf = "bill" }
+                            }
+                            if (record.planned > 0.0) {
+                                Spacer(Modifier.height(10.dp))
+                                SoftButton(
+                                    "Send estimate (${rs(record.planned)})", DocIcons.Pdf, Modifier.fillMaxWidth(),
+                                    bg = Brand.Soft, fg = Brand.Ink
+                                ) { pdf = "estimate" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ───── Pop-ups ─────
+    if (adding || editing != null) {
+        TreatmentDialog(
+            db = db,
+            patientId = patientId,
+            initial = editing,
+            presetTooth = null,
+            onDismiss = {
+                adding = false
+                editing = null
+            },
+            onSaved = { msg ->
+                db.claimLooseTreatments(patientId, recordId)
+                adding = false
+                editing = null
+                DataBus.changed()
+                notify(msg)
+            }
+        )
+    }
+    askEdit?.let { t ->
+        ConfirmDialog(
+            "Change a finished visit?",
+            "Every treatment in this record is done. Change it only to correct a mistake.",
+            confirmText = "Change",
+            onConfirm = {
+                askEdit = null
+                editing = t
+            },
+            onDismiss = { askEdit = null }
+        )
+    }
+    if (notesOpen && record != null) {
+        TxNotesDialog(record.notes, onDismiss = { notesOpen = false }) { text ->
+            db.saveTxNotes(recordId, text)
+            notesOpen = false
+            DataBus.changed()
+            notify("Notes saved ✓")
+        }
+    }
+    if (receive && record != null) {
+        ReceivePaymentDialog(
+            balance = if (record.left > 0.01) record.left else balance,
+            onDismiss = { receive = false }
+        ) { amount, mode ->
+            val id = db.addPayment(patientId, amount, mode)
+            db.linkTxPayment(id, recordId, patientId)
+            receive = false
+            DataBus.changed()
+            notify("Payment of ${rs(amount)} received ✓")
+            receiptFor = id
+        }
+    }
+    val p = patient ?: return
+    val first = p.name.trim().substringBefore(" ")
+    receiptFor?.let { id ->
+        PdfActionsDialog(
+            title = "Payment receipt",
+            subtitle = "Send the receipt to ${p.name}",
+            phone = p.phone,
+            message = "Hello $first, here is your payment receipt from $clinicName. Thank you!",
+            build = { ctx -> paymentReceiptPdf(ctx, db, id) },
+            onDismiss = { receiptFor = null }
+        )
+    }
+    pdf?.let { kind ->
+        val estimate = kind == "estimate"
+        PdfActionsDialog(
+            title = if (estimate) "Treatment estimate" else "Bill for this visit",
+            subtitle = record?.let { txDate(it.day) }.orEmpty(),
+            phone = p.phone,
+            message = if (estimate) "Hello $first, here is the estimate for your dental treatment from $clinicName."
+            else "Hello $first, here is your bill from $clinicName. Thank you!",
+            build = { ctx ->
+                if (estimate) txEstimatePdf(ctx, db, patientId, recordId) else txBillPdf(ctx, db, patientId, recordId)
+            },
+            onDismiss = { pdf = null }
+        )
+    }
+}
+
+@Composable
+private fun TxTreatmentRow(t: Treatment, doctor: String, locked: Boolean, onOpen: () -> Unit, onStatus: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onOpen)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(t.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val sub = listOf(txTeeth(t), doctor).filter { it.isNotBlank() }.joinToString(" · ")
+            if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (t.notes.isNotBlank()) Text(t.notes, fontSize = 12.sp, color = Brand.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(if (t.fee > 0) rs(t.fee) else "–", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Brand.Ink)
+            Spacer(Modifier.height(4.dp))
+            Box(Modifier.clip(RoundedCornerShape(50)).clickable(enabled = !locked, onClick = onStatus)) {
+                Pill(statusLabel(t.status), statusSoft(t.status), statusText(t.status))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TxMoney(label: String, value: String, color: Color, modifier: Modifier) {
+    Column(modifier) {
+        Text(label, fontSize = 12.sp, color = Brand.Sub)
+        Text(value, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun TxNotesDialog(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(initial) }
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.widthIn(max = 520.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                .background(Brand.Surface).padding(26.dp)
+        ) {
+            Text("Notes for this visit", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
+            Text("For example: crown fitted, bite checked", fontSize = 13.sp, color = Brand.Sub)
+            Spacer(Modifier.height(14.dp))
+            AppField(text, { text = it }, "Notes", lines = 4)
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SoftButton("Cancel", null, Modifier.weight(1f), bg = Brand.Soft, fg = Brand.Sub, onClick = onDismiss)
+                GradientButton("Save", Modifier.weight(1f), Icons.Filled.Check, height = 52.dp) { onSave(text.trim()) }
+            }
+        }
+    }
+}
+
+// ───────────── Bill and estimate for one record ─────────────
+private fun txPatientRows(p: Patient) = listOf(
+    "Name" to p.name,
+    "Age / Sex" to listOf(if (p.age.isNotBlank()) "${p.age} yrs" else "", p.gender).filter { it.isNotBlank() }.joinToString(" / "),
+    "Mobile" to p.phone,
+    "Patient ID" to docNo("P-", p.id)
+)
+
+private fun txTreatmentText(t: Treatment, doctors: Map<Long, String>): String {
+    val doctor = doctors[t.doctorId].orEmpty()
+    return if (doctor.isBlank()) t.name else "${t.name}\n$doctor"
+}
+
+private fun txConsultants(list: List<Treatment>, doctors: Map<Long, String>, db: ClinicDb): String =
+    list.mapNotNull { doctors[it.doctorId]?.takeIf { n -> n.isNotBlank() } }.distinct().joinToString(", ")
+        .ifBlank { db.mainDoctor()?.name.orEmpty() }
+
+/** Bill for one treatment record (one visit). */
+private fun txBillPdf(context: Context, db: ClinicDb, patientId: Long, recordId: Long): File {
+    val patient = db.getPatient(patientId) ?: error("Patient not found")
+    val record = db.txRecordsOf(patientId).firstOrNull { it.id == recordId } ?: error("Record not found")
+    val billed = record.treatments.filter { it.status != STATUS_PLANNED }
+    val doctors = db.doctorNames()
+    val end = Layout.Alignment.ALIGN_OPPOSITE
+    val status = when {
+        record.billed <= 0.0 -> "Nothing billed yet"
+        record.left > 0.01 -> "Balance due"
+        else -> "Paid in full"
+    }
+    val pdf = PdfBuilder(context, db.clinicInfo())
+    pdf.title("INVOICE", "")
+    pdf.partyBox(
+        "PATIENT DETAILS", txPatientRows(patient),
+        "INVOICE DETAILS", listOf(
+            "Invoice No." to docNo("INV-", patient.id) + "-" + record.id,
+            "Visit date" to txDate(record.day),
+            "Consultant" to txConsultants(billed, doctors, db),
+            "Status" to status
+        )
+    )
+    val rows = if (billed.isEmpty()) {
+        listOf(
+            listOf(
+                PdfCell("–", 0.07f, 9.5f, PdfSub), PdfCell("No billed treatments yet", 0.43f, 9.5f, PdfSub),
+                PdfCell("–", 0.13f, 9.5f), PdfCell("–", 0.17f, 9f), PdfCell(rupees2(0.0), 0.2f, 9.5f, align = end)
+            )
+        )
+    } else {
+        billed.mapIndexed { i, t ->
+            listOf(
+                PdfCell("${i + 1}", 0.07f, 9.5f, PdfSub),
+                PdfCell(txTreatmentText(t, doctors), 0.43f, 9.5f, PdfInk, 1),
+                PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.13f, 9.5f),
+                PdfCell(fmtDate(if (t.doneAt > 0L) t.doneAt else t.createdAt), 0.17f, 9f, PdfSub),
+                PdfCell(rupees2(t.fee), 0.2f, 9.5f, align = end)
+            )
+        }
+    }
+    pdf.table(
+        listOf(
+            PdfCell("Sr.", 0.07f, 9f, PdfSub, 1),
+            PdfCell("Treatment / Procedure", 0.43f, 9f, PdfSub, 1),
+            PdfCell("Tooth", 0.13f, 9f, PdfSub, 1),
+            PdfCell("Date", 0.17f, 9f, PdfSub, 1),
+            PdfCell("Amount", 0.2f, 9f, PdfSub, 1, end)
+        ),
+        rows
+    )
+    pdf.summary(
+        "AMOUNT IN WORDS", amountInWords(record.billed), "",
+        listOf(
+            SummaryLine("Total Amount", rupees2(record.billed)),
+            SummaryLine("Amount Paid", rupees2(record.paid), color = PdfGreen),
+            SummaryLine(
+                "Balance Due", rupees2(record.left),
+                strong = true, color = if (record.left > 0.01) PdfRed else PdfGreen
+            )
+        )
+    )
+    pdf.notes(listOf("Bill for the visit on ${txDate(record.day)}.", "This is a computer-generated invoice."))
+    pdf.signature()
+    return pdf.save(pdfFile(context, "Bill", patient.name))
+}
+
+/** Estimate for the planned (To do) treatments of one record. */
+private fun txEstimatePdf(context: Context, db: ClinicDb, patientId: Long, recordId: Long): File {
+    val patient = db.getPatient(patientId) ?: error("Patient not found")
+    val record = db.txRecordsOf(patientId).firstOrNull { it.id == recordId } ?: error("Record not found")
+    val planned = record.treatments.filter { it.status == STATUS_PLANNED }
+    val doctors = db.doctorNames()
+    val total = planned.sumOf { it.fee }
+    val now = System.currentTimeMillis()
+    val end = Layout.Alignment.ALIGN_OPPOSITE
+    val pdf = PdfBuilder(context, db.clinicInfo())
+    pdf.title("TREATMENT ESTIMATE", "")
+    pdf.partyBox(
+        "PATIENT DETAILS", txPatientRows(patient),
+        "ESTIMATE DETAILS", listOf(
+            "Estimate No." to docNo("EST-", patient.id) + "-" + record.id,
+            "Date" to fmtDate(now),
+            "Valid till" to fmtDate(now + 30L * 24 * 60 * 60 * 1000),
+            "Consultant" to txConsultants(planned, doctors, db)
+        )
+    )
+    val rows = if (planned.isEmpty()) {
+        listOf(
+            listOf(
+                PdfCell("–", 0.07f, 9.5f, PdfSub), PdfCell("No planned treatments", 0.53f, 9.5f, PdfSub),
+                PdfCell("–", 0.18f, 9.5f), PdfCell(rupees2(0.0), 0.22f, 9.5f, align = end)
+            )
+        )
+    } else {
+        planned.mapIndexed { i, t ->
+            listOf(
+                PdfCell("${i + 1}", 0.07f, 9.5f, PdfSub),
+                PdfCell(txTreatmentText(t, doctors), 0.53f, 9.5f, PdfInk, 1),
+                PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.18f, 9.5f),
+                PdfCell(rupees2(t.fee), 0.22f, 9.5f, align = end)
+            )
+        }
+    }
+    pdf.table(
+        listOf(
+            PdfCell("Sr.", 0.07f, 9f, PdfSub, 1),
+            PdfCell("Planned Treatment", 0.53f, 9f, PdfSub, 1),
+            PdfCell("Tooth", 0.18f, 9f, PdfSub, 1),
+            PdfCell("Amount", 0.22f, 9f, PdfSub, 1, end)
+        ),
+        rows
+    )
+    pdf.summary(
+        "ESTIMATED AMOUNT IN WORDS", amountInWords(total), "",
+        listOf(SummaryLine("Estimated Total", rupees2(total), strong = true, color = PdfGreen))
+    )
+    pdf.notes(
+        listOf(
+            "This is an estimate. The final amount may change if the treatment needed changes.",
+            "Valid for 30 days from the date above."
+        )
+    )
+    pdf.signature()
+    return pdf.save(pdfFile(context, "Estimate", patient.name))
+}
