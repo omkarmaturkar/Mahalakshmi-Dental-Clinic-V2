@@ -66,6 +66,7 @@ fun TreatmentDialog(
 ) {
     val doctors = remember { db.doctors() }
     val custom = remember { mutableStateListOf<String>().apply { addAll(db.customTreatments()) } }
+    var addingName by remember { mutableStateOf(false) }
     val mainId = remember(doctors) { (doctors.firstOrNull { it.main } ?: doctors.firstOrNull())?.id ?: 0L }
     var name by remember { mutableStateOf(initial?.name ?: "") }
     val teeth = remember { mutableStateListOf<String>().apply { addAll(initial?.teethList ?: listOfNotNull(presetTooth)) } }
@@ -104,7 +105,15 @@ fun TreatmentDialog(
                 if (initial == null) "Add treatment" else "Edit treatment",
                 fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink
             )
-            SheetLabel("Treatment")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { SheetLabel("Treatment") }
+                Text(
+                    "+ Add new", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenText,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { addingName = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+            Box(Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 (treatmentOptions + custom + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions && it !in custom }).forEach { option ->
                     ChoiceChip(option, name == option) {
@@ -117,6 +126,10 @@ fun TreatmentDialog(
                         }
                     }
                 }
+            }
+            }
+            if (treatmentOptions.size + custom.size > 12) {
+                Text("Scroll the list to see all treatments", fontSize = 12.sp, color = Brand.Sub)
             }
             AppField(name, { name = it }, "Or type the treatment name", caps = KeyboardCapitalization.Words)
             if (name in custom) {
@@ -193,6 +206,24 @@ fun TreatmentDialog(
         }
     }
 
+    if (addingName) {
+        NewTreatmentDialog(
+            db = db,
+            onDismiss = { addingName = false },
+            onAdded = { added ->
+                if (custom.none { it.equals(added, ignoreCase = true) } && treatmentOptions.none { it.equals(added, ignoreCase = true) }) {
+                    custom.add(added)
+                }
+                if (name.isBlank()) {
+                    name = added
+                    db.priceFor(added)?.let {
+                        fee = numText(it)
+                        autoFee = true
+                    }
+                }
+            }
+        )
+    }
     if (askDelete && initial != null) {
         ConfirmDialog(
             "Remove ${initial.name}?",
