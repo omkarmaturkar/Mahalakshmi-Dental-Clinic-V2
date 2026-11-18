@@ -1,0 +1,374 @@
+name: Tool - tablet size, treatment names, record dates, patient IDs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the new file AppHelpers.kt
+        run: |
+          cat > app/src/main/java/com/mahalakshmi/dental/AppHelpers.kt <<'KT'
+          package com.mahalakshmi.dental
+
+          import android.content.ContentValues
+          import android.database.sqlite.SQLiteDatabase
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.size
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.Icon
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.CompositionLocalProvider
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.graphics.vector.ImageVector
+          import androidx.compose.ui.platform.LocalConfiguration
+          import androidx.compose.ui.platform.LocalDensity
+          import androidx.compose.ui.unit.Density
+          import androidx.compose.ui.unit.dp
+          import java.time.LocalDate
+          import java.time.format.DateTimeFormatter
+
+          // ───────────── Bigger on tablets (v37) ─────────────
+          /** On tablets everything is drawn larger, so the app fills a big screen the way it fills a phone. */
+          @Composable
+          fun ScaledForTablets(content: @Composable () -> Unit) {
+              val width = LocalConfiguration.current.smallestScreenWidthDp
+              val scale = when {
+                  width >= 720 -> 1.3f
+                  width >= 600 -> 1.15f
+                  else -> 1f
+              }
+              if (scale == 1f) {
+                  content()
+              } else {
+                  val d = LocalDensity.current
+                  CompositionLocalProvider(LocalDensity provides Density(d.density * scale, d.fontScale), content = content)
+              }
+          }
+
+          // ───────────── Treatment names typed by hand ─────────────
+          private const val CUSTOM_TREATMENTS = "treatments:custom"
+
+          private fun ClinicDb.saveCustomTreatments(list: List<String>) {
+              val cv = ContentValues().apply {
+                  put("key", CUSTOM_TREATMENTS)
+                  put("value", list.joinToString("\n"))
+              }
+              writableDatabase.insertWithOnConflict("settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+          }
+
+          /** Names typed by hand, shown as chips after the usual ones. The first time, earlier typed names are collected. */
+          fun ClinicDb.customTreatments(): List<String> {
+              val saved = readableDatabase.rawQuery("SELECT value FROM settings WHERE key = ?", arrayOf(CUSTOM_TREATMENTS))
+                  .use { c -> if (c.moveToFirst()) c.getString(0) else null }
+              if (saved != null) return saved.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+              val found = mutableListOf<String>()
+              readableDatabase.rawQuery(
+                  "SELECT TRIM(name), COUNT(*) AS n FROM treatments WHERE TRIM(IFNULL(name, '')) <> '' " +
+                      "GROUP BY LOWER(TRIM(name)) ORDER BY n DESC LIMIT 40",
+                  null
+              ).use { c -> while (c.moveToNext()) found.add(c.getString(0)) }
+              val list = found.filter { n ->
+                  treatmentOptions.none { o -> o.equals(n, ignoreCase = true) || n.startsWith("$o (", ignoreCase = true) }
+              }.distinctBy { it.lowercase() }.take(20)
+              saveCustomTreatments(list)
+              return list
+          }
+
+          /** Adds a name typed by hand to the list (once). */
+          fun ClinicDb.rememberTreatment(name: String) {
+              val n = name.trim()
+              if (n.isBlank() || treatmentOptions.any { it.equals(n, ignoreCase = true) }) return
+              val list = customTreatments()
+              if (list.any { it.equals(n, ignoreCase = true) }) return
+              saveCustomTreatments(list + n)
+          }
+
+          /** Takes a name off the list. Treatments that already use it keep their name. */
+          fun ClinicDb.forgetTreatment(name: String) {
+              saveCustomTreatments(customTreatments().filterNot { it.equals(name.trim(), ignoreCase = true) })
+          }
+
+          // ───────────── Small square button ─────────────
+          @Composable
+          fun SquareIconButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+              Box(
+                  Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Brand.Soft).clickable(onClick = onClick),
+                  contentAlignment = Alignment.Center
+              ) { Icon(icon, label, tint = Brand.Ink) }
+          }
+
+          // ───────────── Patient ID and OPD ID ─────────────
+          private var idPrefix: String? = null
+
+          private fun initialsOf(name: String): String =
+              name.split(Regex("\\s+")).mapNotNull { w -> w.firstOrNull { it.isLetter() } }
+                  .joinToString("") { it.uppercaseChar().toString() }.take(4).ifBlank { "PT" }
+
+          /** Letters in front of every patient ID (e.g. MDC). Made from the clinic name the first time, then kept. */
+          fun ClinicDb.loadPatientPrefix(): String {
+              idPrefix?.let { return it }
+              val saved = readableDatabase.rawQuery("SELECT value FROM settings WHERE key = ?", arrayOf("patient_id_prefix"))
+                  .use { c -> if (c.moveToFirst()) c.getString(0) else null }
+              val prefix = saved?.takeIf { it.isNotBlank() } ?: initialsOf(clinicInfo().name).also { made ->
+                  val cv = ContentValues().apply {
+                      put("key", "patient_id_prefix")
+                      put("value", made)
+                  }
+                  writableDatabase.insertWithOnConflict("settings", null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+              }
+              idPrefix = prefix
+              return prefix
+          }
+
+          /** Permanent patient ID, e.g. MDC-001. Built from the patient number, which is never reused. */
+          fun patientCode(id: Long): String =
+              (idPrefix ?: initialsOf(DEFAULT_CLINIC_NAME)) + "-" + id.toString().padStart(3, '0')
+
+          /** OPD ID of one visit: patient ID + visit date (DDMMYY), e.g. MDC-001-181126 for 18 Nov 2026. */
+          fun opdId(patientId: Long, day: Long): String =
+              patientCode(patientId) + "-" + LocalDate.ofEpochDay(day).format(DateTimeFormatter.ofPattern("ddMMyy"))
+          KT
+
+      - name: Check every line, then change the files
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change: file, the lines that must be there now, the lines that replace them
+          CHANGES = [
+              ('Theme.kt',
+               ['MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)'],
+               ['    MaterialTheme(colorScheme = scheme, typography = AppTypography) { ScaledForTablets(content) }']),
+
+              ('PatientSheets.kt',
+               ['presetTooth: String?,', 'onDismiss: () -> Unit,'],
+               ['    presetTooth: String?,', '    defaultStatus: Int = STATUS_ONGOING,', '    onDismiss: () -> Unit,']),
+              ('PatientSheets.kt',
+               ['val doctors = remember { db.doctors() }'],
+               ['    val doctors = remember { db.doctors() }',
+                '    val custom = remember { mutableStateListOf<String>().apply { addAll(db.customTreatments()) } }']),
+              ('PatientSheets.kt',
+               ['var status by remember { mutableIntStateOf(initial?.status ?: STATUS_ONGOING) }'],
+               ['    var status by remember { mutableIntStateOf(initial?.status ?: defaultStatus) }']),
+              ('PatientSheets.kt',
+               ['if (rememberFee) db.rememberPrice(name, feeValue)'],
+               ['        if (rememberFee) db.rememberPrice(name, feeValue)',
+                '        db.rememberTreatment(name)']),
+              ('PatientSheets.kt',
+               ['(treatmentOptions + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions }).forEach { option ->'],
+               ['                (treatmentOptions + custom + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions && it !in custom }).forEach { option ->']),
+              ('PatientSheets.kt',
+               ['AppField(name, { name = it }, "Or type the treatment name", caps = KeyboardCapitalization.Words)'],
+               ['            AppField(name, { name = it }, "Or type the treatment name", caps = KeyboardCapitalization.Words)',
+                '            if (name in custom) {',
+                '                Text(',
+                '                    "Remove $name from the list", fontSize = 12.sp, color = Brand.Red,',
+                '                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {',
+                '                        db.forgetTreatment(name)',
+                '                        custom.remove(name)',
+                '                    }.padding(vertical = 4.dp)',
+                '                )',
+                '            } else if (name.isNotBlank() && name !in treatmentOptions) {',
+                '                Text("New treatment: it stays in the list after you save.", fontSize = 12.sp, color = Brand.Sub)',
+                '            }']),
+
+              ('TreatmentRecords.kt',
+               ['import androidx.compose.material.icons.filled.Check'],
+               ['import androidx.compose.material.icons.filled.Check',
+                'import androidx.compose.material.icons.filled.DateRange']),
+              ('TreatmentRecords.kt',
+               ['val nextSitting: String'],
+               ['    val nextSitting: String,',
+                '    val opd: String = ""']),
+              ('TreatmentRecords.kt',
+               ["/** Today's record for this patient, made if there is none yet. */"],
+               ['/** The record for this patient on that day, made if there is none yet. */']),
+              ('TreatmentRecords.kt',
+               ['private fun ClinicDb.todayTxRecord(patientId: Long): Long {',
+                'ensureTxRecords()',
+                'val today = todayEpochDay()',
+                'return txRecordOnDay(patientId, today) ?: newTxRecord(patientId, today)',
+                '}'],
+               ['private fun ClinicDb.txRecordForDay(patientId: Long, day: Long): Long {',
+                '    ensureTxRecords()',
+                '    return txRecordOnDay(patientId, day) ?: newTxRecord(patientId, day)',
+                '}',
+                '',
+                '/** Moves a record to another day (its treatments and payments go with it). */',
+                'private fun ClinicDb.moveTxRecord(recordId: Long, day: Long) {',
+                '    ensureTxRecords()',
+                '    val cv = ContentValues().apply { put("day", day) }',
+                '    writableDatabase.update("treatment_records", cv, "id = ?", arrayOf(recordId.toString()))',
+                '}']),
+              ('TreatmentRecords.kt',
+               ['nextSitting = next'],
+               ['            nextSitting = next,',
+                '            opd = opdId(patientId, day)']),
+              ('TreatmentRecords.kt',
+               ['var showAll by remember { mutableStateOf(false) }'],
+               ['    var showAll by remember { mutableStateOf(false) }',
+                '    var pickDay by remember { mutableStateOf(false) }']),
+              ('TreatmentRecords.kt',
+               ['fun startNew() {'],
+               ['    fun startNew(day: Long) {']),
+              ('TreatmentRecords.kt',
+               ['val id = db.todayTxRecord(patientId)'],
+               ['        val id = db.txRecordForDay(patientId, day)']),
+              ('TreatmentRecords.kt',
+               ['startNew()'],
+               ['            startNew(todayEpochDay())']),
+              ('TreatmentRecords.kt',
+               ['SoftButton("New treatment record", Icons.Filled.Add, Modifier.fillMaxWidth(), height = 52.dp) { startNew() }'],
+               ['        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {',
+                '            SoftButton("New treatment record", Icons.Filled.Add, Modifier.weight(1f), height = 52.dp) { startNew(todayEpochDay()) }',
+                '            SquareIconButton(Icons.Filled.DateRange, "Record for another day") { pickDay = true }',
+                '        }']),
+              ('TreatmentRecords.kt',
+               ['openId?.let { id ->'],
+               ['    if (pickDay) {',
+                '        DatePick(todayEpochDay(), onDismiss = { pickDay = false }) { day ->',
+                '            pickDay = false',
+                '            startNew(day)',
+                '        }',
+                '    }',
+                '    openId?.let { id ->']),
+              ('TreatmentRecords.kt',
+               ['TxChip(r)', '}', 'Spacer(Modifier.height(4.dp))'],
+               ['            TxChip(r)',
+                '        }',
+                '        Text("OPD ${r.opd}", fontSize = 12.sp, color = Brand.Slate)',
+                '        Spacer(Modifier.height(4.dp))']),
+              ('TreatmentRecords.kt',
+               ['if (r.done) Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)',
+                'else Pill("Open", Brand.GoldSoft, Brand.GoldDeep)'],
+               ['    when {',
+                '        r.day > todayEpochDay() -> Pill("Upcoming", Brand.Soft, Brand.Slate)',
+                '        r.done -> Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)',
+                '        else -> Pill("Open", Brand.GoldSoft, Brand.GoldDeep)',
+                '    }']),
+              ('TreatmentRecords.kt',
+               ['var pdf by remember { mutableStateOf<String?>(null) }'],
+               ['    var pdf by remember { mutableStateOf<String?>(null) }',
+                '    var moveDay by remember { mutableStateOf(false) }']),
+              ('TreatmentRecords.kt',
+               ['AppTopBar(record?.let { txDate(it.day) } ?: "Treatment record", patient?.name.orEmpty(), onClose) {'],
+               ['            AppTopBar(record?.let { txDate(it.day) } ?: "Treatment record", listOfNotNull(patient?.name, record?.let { "OPD " + it.opd }).joinToString(" · "), onClose) {']),
+              ('TreatmentRecords.kt',
+               ['if (record != null) TxChip(record)'],
+               ['                if (record != null) {',
+                '                    CircleIconButton(Icons.Filled.DateRange, { moveDay = true }, size = 40.dp)',
+                '                    Spacer(Modifier.width(8.dp))',
+                '                    TxChip(record)',
+                '                }']),
+              ('TreatmentRecords.kt',
+               ['presetTooth = presetTooth,'],
+               ['            presetTooth = presetTooth,',
+                '            defaultStatus = if ((record?.day ?: 0L) > todayEpochDay()) STATUS_PLANNED else STATUS_ONGOING,']),
+              ('TreatmentRecords.kt',
+               ['if (askDelete && record != null) {'],
+               ['    if (moveDay && record != null) {',
+                '        DatePick(record.day, onDismiss = { moveDay = false }) { day ->',
+                '            moveDay = false',
+                '            db.moveTxRecord(recordId, day)',
+                '            DataBus.changed()',
+                '            notify("Record moved to ${txDate(day)} ✓")',
+                '        }',
+                '    }',
+                '    if (askDelete && record != null) {']),
+              ('TreatmentRecords.kt',
+               ['"Patient ID" to docNo("P-", p.id)'],
+               ['    "Patient ID" to patientCode(p.id)']),
+              ('TreatmentRecords.kt',
+               ['"Status" to status'],
+               ['            "OPD No." to record.opd']),
+
+              ('PatientScreens.kt',
+               ['AppTopBar(patient.name, "Patient file", onBack) {'],
+               ['            AppTopBar(patient.name, "Patient ID: " + patientCode(patientId), onBack) {']),
+
+              ('PatientCards.kt',
+               ['val matches = q.isEmpty() || p.name.lowercase().contains(q) || p.phone.contains(q)'],
+               ['        val matches = q.isEmpty() || p.name.lowercase().contains(q) || p.phone.contains(q) || patientCode(p.id).lowercase().contains(q)']),
+              ('PatientCards.kt',
+               ['fun patientSubtitle(p: Patient): String ='],
+               ['fun patientSubtitle(p: Patient): String = patientCode(p.id) + "  ·  " + visitSubtitle(p)',
+                '',
+                'private fun visitSubtitle(p: Patient): String =']),
+
+              ('Bills.kt',
+               ['"Patient ID" to docNo("P-", p.id)'],
+               ['    "Patient ID" to patientCode(p.id)']),
+
+              ('HomePatients.kt',
+               ['MaterialTheme(typography = ClassicTypography) { TodayScreenContent(db, go) }'],
+               ['    remember { runCatching { db.loadPatientPrefix() } }',
+                '    MaterialTheme(typography = ClassicTypography) { TodayScreenContent(db, go) }']),
+          ]
+
+          problems = []
+          helpers = KT / 'AppHelpers.kt'
+          if not helpers.is_file() or 'fun ScaledForTablets(' not in helpers.read_text(encoding='utf-8'):
+              problems.append('AppHelpers.kt was not written')
+
+          texts = {}
+          found = []
+          for name, old, new in CHANGES:
+              if name not in texts:
+                  path = KT / name
+                  texts[name] = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+                  if texts[name] is None:
+                      problems.append(name + ' was not found')
+              lines = texts[name]
+              if lines is None:
+                  continue
+              hits = [i for i in range(len(lines) - len(old) + 1)
+                      if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+              if len(hits) != 1:
+                  problems.append('%s: expected once, found %d times: %s' % (name, len(hits), ' | '.join(old)))
+              else:
+                  found.append((name, hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*\d+\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"\d+\.0"\s*', l)]
+          if len(code) != 1 or len(vname) != 1:
+              problems.append('app/build.gradle.kts: versionCode / versionName lines not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          for name, start, count, new in sorted(found, key=lambda f: (f[0], -f[1])):
+              texts[name][start:start + count] = new
+          for name, lines in texts.items():
+              (KT / name).write_text('\n'.join(lines), encoding='utf-8')
+          version = int(re.search(r'\d+', gradle[code[0]]).group(0)) + 1
+          gradle[code[0]] = re.sub(r'\d+', str(version), gradle[code[0]], count=1)
+          gradle[vname[0]] = re.sub(r'"\d+\.0"', '"%d.0"' % version, gradle[vname[0]], count=1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('All changes made. New version: %d' % version)
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Tablet size, own treatment names, records for any date, patient ID and OPD ID"
+          git push
