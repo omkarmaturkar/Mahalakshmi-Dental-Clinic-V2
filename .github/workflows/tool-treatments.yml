@@ -1,0 +1,203 @@
+name: Tool - add treatments to the list, scrolling chips
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the new file TreatmentList.kt
+        run: |
+          cat > app/src/main/java/com/mahalakshmi/dental/TreatmentList.kt <<'KT'
+          package com.mahalakshmi.dental
+
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Add
+          import androidx.compose.material.icons.filled.Check
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.focus.FocusRequester
+          import androidx.compose.ui.focus.focusRequester
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.KeyboardCapitalization
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import androidx.compose.ui.window.Dialog
+          import kotlinx.coroutines.delay
+
+          /** Adds a treatment to the list before it is used, with its usual fee. "Save & add another" keeps it open. */
+          @Composable
+          fun NewTreatmentDialog(db: ClinicDb, onDismiss: () -> Unit, onAdded: (String) -> Unit) {
+              val notify = LocalNotify.current
+              var name by remember { mutableStateOf("") }
+              var fee by remember { mutableStateOf("") }
+              val focus = remember { FocusRequester() }
+
+              fun add(): Boolean {
+                  val n = name.trim()
+                  if (n.isBlank()) return false
+                  db.rememberTreatment(n)
+                  val f = fee.toDoubleOrNull() ?: 0.0
+                  if (f > 0.0) db.rememberPrice(n, f)
+                  onAdded(n)
+                  notify("$n added to the list ✓")
+                  return true
+              }
+
+              Dialog(onDismissRequest = onDismiss) {
+                  Column(
+                      Modifier.widthIn(max = 460.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                          .background(Brand.Surface).padding(24.dp)
+                  ) {
+                      Text("New treatment", fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
+                      Text("It joins the list, ready to choose for any patient.", fontSize = 13.sp, color = Brand.Sub)
+                      Spacer(Modifier.height(14.dp))
+                      AppField(
+                          name, { name = it }, "Treatment name",
+                          modifier = Modifier.fillMaxWidth().focusRequester(focus), caps = KeyboardCapitalization.Words
+                      )
+                      Spacer(Modifier.height(10.dp))
+                      AppField(
+                          fee, { fee = it.filter { c -> c.isDigit() || c == '.' } }, "Usual fee (optional)",
+                          type = KeyboardType.Decimal, prefix = "₹ "
+                      )
+                      Spacer(Modifier.height(18.dp))
+                      SoftButton("Save & add another", Icons.Filled.Add, Modifier.fillMaxWidth(), height = 48.dp) {
+                          if (add()) {
+                              name = ""
+                              fee = ""
+                              runCatching { focus.requestFocus() }
+                          }
+                      }
+                      Spacer(Modifier.height(10.dp))
+                      Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                          SoftButton("Close", null, Modifier.weight(1f), bg = Brand.Soft, fg = Brand.Sub, onClick = onDismiss)
+                          GradientButton("Save", Modifier.weight(1f), Icons.Filled.Check, enabled = name.isNotBlank(), height = 52.dp) {
+                              if (add()) onDismiss()
+                          }
+                      }
+                  }
+              }
+              LaunchedEffect(Unit) {
+                  delay(250)
+                  runCatching { focus.requestFocus() }
+              }
+          }
+          KT
+
+      - name: Check every line, then change PatientSheets.kt
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change in PatientSheets.kt: the lines that must be there now, the lines that replace them
+          CHANGES = [
+              (['val custom = remember { mutableStateListOf<String>().apply { addAll(db.customTreatments()) } }'],
+               ['    val custom = remember { mutableStateListOf<String>().apply { addAll(db.customTreatments()) } }',
+                '    var addingName by remember { mutableStateOf(false) }']),
+              (['SheetLabel("Treatment")'],
+               ['            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {',
+                '                Box(Modifier.weight(1f)) { SheetLabel("Treatment") }',
+                '                Text(',
+                '                    "+ Add new", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.GreenText,',
+                '                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { addingName = true }',
+                '                        .padding(horizontal = 8.dp, vertical = 4.dp)',
+                '                )',
+                '            }']),
+              (['FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {',
+                '(treatmentOptions + custom + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions && it !in custom }).forEach { option ->'],
+               ['            Box(Modifier.fillMaxWidth().heightIn(max = 140.dp).verticalScroll(rememberScrollState())) {',
+                '            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {',
+                '                (treatmentOptions + custom + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions && it !in custom }).forEach { option ->']),
+              (['AppField(name, { name = it }, "Or type the treatment name", caps = KeyboardCapitalization.Words)'],
+               ['            }',
+                '            if (treatmentOptions.size + custom.size > 12) {',
+                '                Text("Scroll the list to see all treatments", fontSize = 12.sp, color = Brand.Sub)',
+                '            }',
+                '            AppField(name, { name = it }, "Or type the treatment name", caps = KeyboardCapitalization.Words)']),
+              (['if (askDelete && initial != null) {'],
+               ['    if (addingName) {',
+                '        NewTreatmentDialog(',
+                '            db = db,',
+                '            onDismiss = { addingName = false },',
+                '            onAdded = { added ->',
+                '                if (custom.none { it.equals(added, ignoreCase = true) } && treatmentOptions.none { it.equals(added, ignoreCase = true) }) {',
+                '                    custom.add(added)',
+                '                }',
+                '                if (name.isBlank()) {',
+                '                    name = added',
+                '                    db.priceFor(added)?.let {',
+                '                        fee = numText(it)',
+                '                        autoFee = true',
+                '                    }',
+                '                }',
+                '            }',
+                '        )',
+                '    }',
+                '    if (askDelete && initial != null) {']),
+          ]
+
+          problems = []
+          for need, mark in (('AppHelpers.kt', 'fun rememberTreatment('), ('TreatmentList.kt', 'fun NewTreatmentDialog(')):
+              f = KT / need
+              if not f.is_file() or mark not in f.read_text(encoding='utf-8'):
+                  problems.append(need + ' is missing (run the earlier tool tool-v37.yml first)')
+
+          path = KT / 'PatientSheets.kt'
+          lines = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+          found = []
+          if lines is None:
+              problems.append('PatientSheets.kt was not found')
+          else:
+              for old, new in CHANGES:
+                  hits = [i for i in range(len(lines) - len(old) + 1)
+                          if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+                  if len(hits) != 1:
+                      problems.append('PatientSheets.kt: expected once, found %d times: %s' % (len(hits), ' | '.join(old)))
+                  else:
+                      found.append((hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*\d+\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"\d+\.0"\s*', l)]
+          if len(code) != 1 or len(vname) != 1:
+              problems.append('app/build.gradle.kts: versionCode / versionName lines not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          for start, count, new in sorted(found, key=lambda f: -f[0]):
+              lines[start:start + count] = new
+          path.write_text('\n'.join(lines), encoding='utf-8')
+          version = int(re.search(r'\d+', gradle[code[0]]).group(0)) + 1
+          gradle[code[0]] = re.sub(r'\d+', str(version), gradle[code[0]], count=1)
+          gradle[vname[0]] = re.sub(r'"\d+\.0"', '"%d.0"' % version, gradle[vname[0]], count=1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('Add new button and scrolling chips added. New version: %d' % version)
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add treatments to the list in advance; treatment chips scroll after three rows"
+          git push
