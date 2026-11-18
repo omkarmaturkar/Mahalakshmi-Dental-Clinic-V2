@@ -243,10 +243,11 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                             maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                         val info = listOf(
-                            patient.gender, if (patient.age.isNotBlank()) "${patient.age} yrs" else "",
+                            patientCode(patient.id), patient.gender, if (patient.age.isNotBlank()) "${patient.age} yrs" else "",
                             "Date ${fmtDate(createdAt)}"
                         ).filter { it.isNotBlank() }.joinToString("  ·  ")
                         Text(info, fontSize = 12.sp, color = Brand.Sub)
+                        Text("OPD No. " + opdId(patientId, epochDayOf(createdAt)), fontSize = 12.sp, color = Brand.Sub)
                     }
                 }
                 if (patient.alerts.isNotEmpty()) {
@@ -566,8 +567,22 @@ fun prescriptionPdf(context: Context, db: ClinicDb, rxId: Long): File {
     val patient = db.getPatient(rx.patientId) ?: error("Patient not found")
     val next = db.nextBooking(rx.patientId)
     val pdf = PdfBuilder(context, db.clinicInfo())
-    pdf.title("PRESCRIPTION", "Date: ${fmtDate(rx.date)}")
-    pdf.patientBox(patient)
+    pdf.title("PRESCRIPTION", "")
+    pdf.partyBox(
+        "PATIENT DETAILS", listOf(
+            "Name" to patient.name,
+            "Age / Sex" to listOf(if (patient.age.isNotBlank()) "${patient.age} yrs" else "", patient.gender)
+                .filter { it.isNotBlank() }.joinToString(" / "),
+            "Mobile" to patient.phone,
+            "Patient ID" to patientCode(patient.id)
+        ),
+        "PRESCRIPTION DETAILS", listOf(
+            "Rx No." to docNo("RX-", rx.id),
+            "OPD No." to opdId(rx.patientId, epochDayOf(rx.date)),
+            "Date" to fmtDate(rx.date),
+            "Consultant" to (db.mainDoctor()?.name ?: db.clinicInfo().name)
+        )
+    )
     if (patient.alerts.isNotEmpty()) {
         pdf.text("Medical alerts: " + patient.alerts.joinToString(", "), 10f, PdfRed, 1, after = 8f)
     }
