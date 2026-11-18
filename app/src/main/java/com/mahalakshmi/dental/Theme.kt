@@ -203,7 +203,7 @@ fun ClinicTheme(content: @Composable () -> Unit) {
             outline = Color(0xFFD8DDD5), outlineVariant = Brand.Line, error = Brand.Red
         )
     }
-    MaterialTheme(colorScheme = scheme, typography = AppTypography, content = content)
+    MaterialTheme(colorScheme = scheme, typography = AppTypography) { ScaledForTablets(content) }
 }
 
 /** dark = true gives dark icons (for light pages); false gives light icons (for dark pages). */

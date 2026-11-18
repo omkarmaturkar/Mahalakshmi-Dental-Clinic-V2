@@ -47,7 +47,7 @@ fun filterPatients(all: List<Patient>, search: String, filter: Int, todayIds: Se
     val q = search.trim().lowercase()
     val todayStart = startOfToday()
     val list = all.filter { p ->
-        val matches = q.isEmpty() || p.name.lowercase().contains(q) || p.phone.contains(q)
+        val matches = q.isEmpty() || p.name.lowercase().contains(q) || p.phone.contains(q) || patientCode(p.id).lowercase().contains(q)
         val inFilter = when (filter) {
             1 -> p.remaining > 0.0
             2 -> p.lastVisit >= todayStart || p.id in todayIds
@@ -58,7 +58,9 @@ fun filterPatients(all: List<Patient>, search: String, filter: Int, todayIds: Se
     return if (filter == 1) list.sortedByDescending { it.remaining } else list
 }
 
-fun patientSubtitle(p: Patient): String =
+fun patientSubtitle(p: Patient): String = patientCode(p.id) + "  ·  " + visitSubtitle(p)
+
+private fun visitSubtitle(p: Patient): String =
     if (p.lastVisit > 0L) "${p.lastReason.substringBefore(",").ifBlank { "Visit" }} · ${relativeTime(p.lastVisit)}"
     else p.phone.ifBlank { "New patient" }
 

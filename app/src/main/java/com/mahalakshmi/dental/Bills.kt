@@ -60,7 +60,7 @@ private fun patientRows(p: Patient) = listOf(
     "Name" to p.name,
     "Age / Sex" to listOf(if (p.age.isNotBlank()) "${p.age} yrs" else "", p.gender).filter { it.isNotBlank() }.joinToString(" / "),
     "Mobile" to p.phone,
-    "Patient ID" to docNo("P-", p.id)
+    "Patient ID" to patientCode(p.id)
 )
 
 private fun consultantsOf(list: List<Treatment>, doctors: Map<Long, String>, db: ClinicDb): String =

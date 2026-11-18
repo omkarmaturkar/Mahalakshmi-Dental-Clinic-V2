@@ -70,6 +70,7 @@ private val ClassicTypography = Typography().withFamily(Lato)
 /** The Home screen in the classic fonts. Other screens keep Poppins until the fonts are approved on the phone. */
 @Composable
 fun TodayScreen(db: ClinicDb, go: (Screen) -> Unit) {
+    remember { runCatching { db.loadPatientPrefix() } }
     MaterialTheme(typography = ClassicTypography) { TodayScreenContent(db, go) }
 }
 

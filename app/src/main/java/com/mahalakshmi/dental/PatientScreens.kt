@@ -393,7 +393,7 @@ fun PatientFileScreen(db: ClinicDb, patientId: Long, startAdd: Boolean, go: (Scr
         }
 
         Column(Modifier.fillMaxSize()) {
-            AppTopBar(patient.name, "Patient file", onBack) {
+            AppTopBar(patient.name, "Patient ID: " + patientCode(patientId), onBack) {
                 CircleIconButton(Icons.Filled.Edit, { go(Screen.PatientForm(patientId)) }, tint = Brand.GreenDeep)
             }
             if (wide) {

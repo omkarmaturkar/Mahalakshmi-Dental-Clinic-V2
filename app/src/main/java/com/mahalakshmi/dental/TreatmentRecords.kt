@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -45,7 +46,8 @@ private class TxRecord(
     val billed: Double,
     val planned: Double,
     val paid: Double,
-    val nextSitting: String
+    val nextSitting: String,
+    val opd: String = ""
 ) {
     val left: Double get() = (billed - paid).coerceAtLeast(0.0)
     val done: Boolean get() = treatments.isNotEmpty() && treatments.all { it.status == STATUS_DONE }
@@ -147,11 +149,17 @@ private fun ClinicDb.syncTxRecords(patientId: Long) {
     }
 }
 
-/** Today's record for this patient, made if there is none yet. */
-private fun ClinicDb.todayTxRecord(patientId: Long): Long {
+/** The record for this patient on that day, made if there is none yet. */
+private fun ClinicDb.txRecordForDay(patientId: Long, day: Long): Long {
     ensureTxRecords()
-    val today = todayEpochDay()
-    return txRecordOnDay(patientId, today) ?: newTxRecord(patientId, today)
+    return txRecordOnDay(patientId, day) ?: newTxRecord(patientId, day)
+}
+
+/** Moves a record to another day (its treatments and payments go with it). */
+private fun ClinicDb.moveTxRecord(recordId: Long, day: Long) {
+    ensureTxRecords()
+    val cv = ContentValues().apply { put("day", day) }
+    writableDatabase.update("treatment_records", cv, "id = ?", arrayOf(recordId.toString()))
 }
 
 /** Puts the treatments added just now into this record. */
@@ -275,7 +283,8 @@ private fun ClinicDb.txRecordsOf(patientId: Long): List<TxRecord> {
             billed = billed[id] ?: 0.0,
             planned = list.filter { it.status == STATUS_PLANNED }.sumOf { it.fee },
             paid = paid[id] ?: 0.0,
-            nextSitting = next
+            nextSitting = next,
+            opd = opdId(patientId, day)
         )
     }.asReversed()
 }
@@ -307,9 +316,10 @@ fun TreatmentRecordsCard(db: ClinicDb, patientId: Long, openNew: Boolean, onOpen
     var openId by remember { mutableStateOf<Long?>(null) }
     var addFirst by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
+    var pickDay by remember { mutableStateOf(false) }
 
-    fun startNew() {
-        val id = db.todayTxRecord(patientId)
+    fun startNew(day: Long) {
+        val id = db.txRecordForDay(patientId, day)
         addFirst = records.firstOrNull { it.id == id }?.treatments.isNullOrEmpty()
         openId = id
         DataBus.changed()
@@ -317,13 +327,16 @@ fun TreatmentRecordsCard(db: ClinicDb, patientId: Long, openNew: Boolean, onOpen
 
     LaunchedEffect(openNew) {
         if (openNew) {
-            startNew()
+            startNew(todayEpochDay())
             onOpened()
         }
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SoftButton("New treatment record", Icons.Filled.Add, Modifier.fillMaxWidth(), height = 52.dp) { startNew() }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            SoftButton("New treatment record", Icons.Filled.Add, Modifier.weight(1f), height = 52.dp) { startNew(todayEpochDay()) }
+            SquareIconButton(Icons.Filled.DateRange, "Record for another day") { pickDay = true }
+        }
         val error = loaded.exceptionOrNull()
         if (error != null) {
             AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
@@ -356,6 +369,12 @@ fun TreatmentRecordsCard(db: ClinicDb, patientId: Long, openNew: Boolean, onOpen
         }
     }
 
+    if (pickDay) {
+        DatePick(todayEpochDay(), onDismiss = { pickDay = false }) { day ->
+            pickDay = false
+            startNew(day)
+        }
+    }
     openId?.let { id ->
         TxDialog(db, patientId, id, addFirst) {
             db.dropTxRecordIfEmpty(id)
@@ -376,6 +395,7 @@ private fun TxRow(r: TxRecord, onOpen: () -> Unit) {
             )
             TxChip(r)
         }
+        Text("OPD ${r.opd}", fontSize = 12.sp, color = Brand.Slate)
         Spacer(Modifier.height(4.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -405,8 +425,11 @@ private fun TxRow(r: TxRecord, onOpen: () -> Unit) {
 
 @Composable
 private fun TxChip(r: TxRecord) {
-    if (r.done) Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
-    else Pill("Open", Brand.GoldSoft, Brand.GoldDeep)
+    when {
+        r.day > todayEpochDay() -> Pill("Upcoming", Brand.Soft, Brand.Slate)
+        r.done -> Pill("Done", Brand.GreenSoft, Brand.GreenText, Icons.Filled.Check)
+        else -> Pill("Open", Brand.GoldSoft, Brand.GoldDeep)
+    }
 }
 
 /** One record, full screen: its teeth chart, treatments, sittings, notes and money. */
@@ -435,6 +458,7 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
     var receive by remember { mutableStateOf(false) }
     var receiptFor by remember { mutableStateOf<Long?>(null) }
     var pdf by remember { mutableStateOf<String?>(null) }
+    var moveDay by remember { mutableStateOf(false) }
 
     fun cycleStatus(t: Treatment) {
         val next = when (t.status) {
@@ -463,8 +487,12 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(Brand.Bg)) {
-            AppTopBar(record?.let { txDate(it.day) } ?: "Treatment record", patient?.name.orEmpty(), onClose) {
-                if (record != null) TxChip(record)
+            AppTopBar(record?.let { txDate(it.day) } ?: "Treatment record", listOfNotNull(patient?.name, record?.let { "OPD " + it.opd }).joinToString(" · "), onClose) {
+                if (record != null) {
+                    CircleIconButton(Icons.Filled.DateRange, { moveDay = true }, size = 40.dp)
+                    Spacer(Modifier.width(8.dp))
+                    TxChip(record)
+                }
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
@@ -578,6 +606,7 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             patientId = patientId,
             initial = editing,
             presetTooth = presetTooth,
+            defaultStatus = if ((record?.day ?: 0L) > todayEpochDay()) STATUS_PLANNED else STATUS_ONGOING,
             onDismiss = {
                 adding = false
                 editing = null
@@ -604,6 +633,14 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             },
             onDismiss = { askEdit = null }
         )
+    }
+    if (moveDay && record != null) {
+        DatePick(record.day, onDismiss = { moveDay = false }) { day ->
+            moveDay = false
+            db.moveTxRecord(recordId, day)
+            DataBus.changed()
+            notify("Record moved to ${txDate(day)} ✓")
+        }
     }
     if (askDelete && record != null) {
         val date = txDate(record.day)
@@ -742,7 +779,7 @@ private fun txPatientRows(p: Patient) = listOf(
     "Name" to p.name,
     "Age / Sex" to listOf(if (p.age.isNotBlank()) "${p.age} yrs" else "", p.gender).filter { it.isNotBlank() }.joinToString(" / "),
     "Mobile" to p.phone,
-    "Patient ID" to docNo("P-", p.id)
+    "Patient ID" to patientCode(p.id)
 )
 
 private fun txTreatmentText(t: Treatment, doctors: Map<Long, String>): String {
@@ -774,7 +811,7 @@ private fun txBillPdf(context: Context, db: ClinicDb, patientId: Long, recordId:
             "Invoice No." to docNo("INV-", patient.id) + "-" + record.id,
             "Visit date" to txDate(record.day),
             "Consultant" to txConsultants(billed, doctors, db),
-            "Status" to status
+            "OPD No." to record.opd
         )
     )
     val rows = if (billed.isEmpty()) {

@@ -60,17 +60,19 @@ fun TreatmentDialog(
     patientId: Long,
     initial: Treatment?,
     presetTooth: String?,
+    defaultStatus: Int = STATUS_ONGOING,
     onDismiss: () -> Unit,
     onSaved: (String) -> Unit
 ) {
     val doctors = remember { db.doctors() }
+    val custom = remember { mutableStateListOf<String>().apply { addAll(db.customTreatments()) } }
     val mainId = remember(doctors) { (doctors.firstOrNull { it.main } ?: doctors.firstOrNull())?.id ?: 0L }
     var name by remember { mutableStateOf(initial?.name ?: "") }
     val teeth = remember { mutableStateListOf<String>().apply { addAll(initial?.teethList ?: listOfNotNull(presetTooth)) } }
     var fee by remember { mutableStateOf(numText(initial?.fee ?: 0.0)) }
     var autoFee by remember { mutableStateOf(initial == null) }
     var rememberFee by remember { mutableStateOf(initial == null) }
-    var status by remember { mutableIntStateOf(initial?.status ?: STATUS_ONGOING) }
+    var status by remember { mutableIntStateOf(initial?.status ?: defaultStatus) }
     var doctorId by remember { mutableLongStateOf(initial?.doctorId ?: mainId) }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
     var showChart by remember { mutableStateOf(teeth.isEmpty()) }
@@ -87,6 +89,7 @@ fun TreatmentDialog(
             )
         )
         if (rememberFee) db.rememberPrice(name, feeValue)
+        db.rememberTreatment(name)
         onSaved(if (initial == null) "Treatment added ✓" else "Treatment updated ✓")
     }
 
@@ -103,7 +106,7 @@ fun TreatmentDialog(
             )
             SheetLabel("Treatment")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                (treatmentOptions + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions }).forEach { option ->
+                (treatmentOptions + custom + listOf(name).filter { it.isNotBlank() && it !in treatmentOptions && it !in custom }).forEach { option ->
                     ChoiceChip(option, name == option) {
                         name = if (name == option) "" else option
                         if (name.isNotBlank() && (autoFee || fee.isBlank())) {
@@ -116,6 +119,17 @@ fun TreatmentDialog(
                 }
             }
             AppField(name, { name = it }, "Or type the treatment name", caps = KeyboardCapitalization.Words)
+            if (name in custom) {
+                Text(
+                    "Remove $name from the list", fontSize = 12.sp, color = Brand.Red,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
+                        db.forgetTreatment(name)
+                        custom.remove(name)
+                    }.padding(vertical = 4.dp)
+                )
+            } else if (name.isNotBlank() && name !in treatmentOptions) {
+                Text("New treatment: it stays in the list after you save.", fontSize = 12.sp, color = Brand.Sub)
+            }
 
             SheetLabel(if (teeth.isEmpty()) "Teeth (optional)" else "Teeth")
             if (teeth.isNotEmpty()) {
