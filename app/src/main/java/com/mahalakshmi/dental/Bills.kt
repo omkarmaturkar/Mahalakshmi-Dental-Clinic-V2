@@ -51,9 +51,10 @@ private val inr2 = NumberFormat.getNumberInstance(Locale.forLanguageTag("en-IN")
 /** Money with two decimals, e.g. ₹6,000.00 */
 fun rupees2(x: Double): String = "₹" + inr2.format(x)
 
-private fun treatmentText(t: Treatment, doctors: Map<Long, String>): String {
+private fun treatmentText(t: Treatment, doctors: Map<Long, String>, opd: String = ""): String {
     val doctor = doctors[t.doctorId].orEmpty()
-    return if (doctor.isBlank()) t.name else "${t.name}\n$doctor"
+    val second = listOf(doctor, if (opd.isNotBlank()) "OPD No. $opd" else "").filter { it.isNotBlank() }.joinToString(" · ")
+    return if (second.isBlank()) t.name else "${t.name}\n$second"
 }
 
 private fun patientRows(p: Patient) = listOf(
@@ -68,6 +69,19 @@ private fun consultantsOf(list: List<Treatment>, doctors: Map<Long, String>, db:
         .ifBlank { db.mainDoctor()?.name.orEmpty() }
 
 // ───────────── Full bill ─────────────
+/** The visit day of each treatment: the day of its treatment record. */
+private fun ClinicDb.visitDays(patientId: Long): Map<Long, Long> {
+    val map = HashMap<Long, Long>()
+    runCatching {
+        readableDatabase.rawQuery(
+            "SELECT ri.treatment_id, r.day FROM record_items ri JOIN treatment_records r ON r.id = ri.record_id " +
+                "WHERE ri.patient_id = ?",
+            arrayOf(patientId.toString())
+        ).use { c -> while (c.moveToNext()) map[c.getLong(0)] = c.getLong(1) }
+    }
+    return map
+}
+
 /** One bill for the whole account: every started or finished treatment, every payment, and the balance. */
 fun invoicePdf(context: Context, db: ClinicDb, patientId: Long): File {
     val patient = db.getPatient(patientId) ?: error("Patient not found")
@@ -76,6 +90,7 @@ fun invoicePdf(context: Context, db: ClinicDb, patientId: Long): File {
     val payments = db.paymentsOf(patientId).sortedBy { it.date }
     val account = accountOf(all, payments)
     val doctors = db.doctorNames()
+    val days = db.visitDays(patientId)
     val end = Layout.Alignment.ALIGN_OPPOSITE
     val status = when {
         account.balance > 0.01 -> "Balance due"
@@ -104,7 +119,7 @@ fun invoicePdf(context: Context, db: ClinicDb, patientId: Long): File {
         billed.mapIndexed { i, t ->
             listOf(
                 PdfCell("${i + 1}", 0.07f, 9.5f, PdfSub),
-                PdfCell(treatmentText(t, doctors), 0.43f, 9.5f, PdfInk, 1),
+                PdfCell(treatmentText(t, doctors, opdId(patientId, days[t.id] ?: epochDayOf(t.createdAt))), 0.43f, 9.5f, PdfInk, 1),
                 PdfCell(t.teethList.joinToString(", ").ifBlank { "–" }, 0.13f, 9.5f),
                 PdfCell(fmtDate(if (t.doneAt > 0L) t.doneAt else t.createdAt), 0.17f, 9f, PdfSub),
                 PdfCell(rupees2(t.fee), 0.2f, 9.5f, align = end)
@@ -167,7 +182,7 @@ fun paymentReceiptPdf(context: Context, db: ClinicDb, paymentId: Long): File {
     val clinic = db.clinicInfo()
     val end = Layout.Alignment.ALIGN_OPPOSITE
     val pdf = PdfBuilder(context, clinic)
-    pdf.title("PAYMENT RECEIPT", "")
+    pdf.title("PAYMENT RECEIPT", "OPD No. " + opdId(pay.patientId, epochDayOf(pay.date)))
     pdf.partyBox(
         "PATIENT DETAILS", patientRows(patient),
         "RECEIPT DETAILS", listOf(
