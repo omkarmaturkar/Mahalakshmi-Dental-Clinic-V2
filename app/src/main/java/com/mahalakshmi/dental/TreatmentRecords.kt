@@ -407,16 +407,20 @@ private fun TxRow(r: TxRecord, onOpen: () -> Unit) {
             )
             TxChip(r)
         }
-        Text("OPD ${r.opd}", fontSize = 12.sp, color = Brand.Slate)
-        Spacer(Modifier.height(4.dp))
+        Text(
+            "OPD ${r.opd}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.Ink,
+            modifier = Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp)).background(Brand.Soft)
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                txSummary(r.treatments), fontSize = 13.sp, color = Brand.Sub, maxLines = 2,
+                txSummary(r.treatments), fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Brand.Ink, maxLines = 2,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
             )
             if (r.total > 0.0) {
                 Spacer(Modifier.width(8.dp))
-                Text(rs(r.total), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
+                Text(rs(r.total), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
             }
         }
         if (r.nextSitting.isNotBlank() || r.left > 0.01) {
@@ -424,11 +428,11 @@ private fun TxRow(r: TxRecord, onOpen: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (r.nextSitting.isNotBlank()) "Next: ${r.nextSitting}" else "",
-                    fontSize = 12.sp, color = Brand.GoldDeep, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GoldDeep, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 if (r.left > 0.01) {
-                    Text("${rs(r.left)} due", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Brand.Red)
+                    Text("${rs(r.left)} due", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Brand.Red)
                 }
             }
         }
@@ -521,6 +525,11 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
                     if (record == null) {
                         Text("This record is not there any more.", fontSize = 14.sp, color = Brand.Sub)
                     } else {
+                        Text(
+                            "OPD No. ${record.opd}", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink,
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Brand.Surface)
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
                         AppCard(Modifier.fillMaxWidth(), padding = 18.dp) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 SectionHeader("Teeth & treatments", Modifier.weight(1f))
@@ -781,7 +790,7 @@ private fun TxTreatmentRow(t: Treatment, doctor: String, locked: Boolean, onOpen
         Column(Modifier.weight(1f)) {
             Text(t.name, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val sub = listOf(txTeeth(t), doctor).filter { it.isNotBlank() }.joinToString(" · ")
-            if (sub.isNotBlank()) Text(sub, fontSize = 12.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub.isNotBlank()) Text(sub, fontSize = 13.sp, color = Brand.Slate, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (t.notes.isNotBlank()) Text(t.notes, fontSize = 12.sp, color = Brand.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(8.dp))
