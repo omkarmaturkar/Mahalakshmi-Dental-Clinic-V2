@@ -50,7 +50,9 @@ data class Prescription(
     val date: Long = System.currentTimeMillis(),
     val diagnosis: String = "",
     val medicines: List<Medicine> = emptyList(),
-    val advice: String = ""
+    val advice: String = "",
+    val complaint: String = "",
+    val findings: String = ""
 )
 
 data class RxTemplate(val id: Long, val name: String, val medicines: List<Medicine>, val advice: String)
@@ -101,18 +103,35 @@ private fun medicinesFromJson(text: String?): List<Medicine> = try {
 }
 
 // ───────────── Database ─────────────
-private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice"
+/** The patient's complaint and the examination findings: columns added to the prescriptions table the first time. */
+private var rxColumnsReady: Any? = null
+
+private fun ClinicDb.ensureRxColumns() {
+    val sql = writableDatabase
+    if (rxColumnsReady === sql) return
+    val have = HashSet<String>()
+    sql.rawQuery("PRAGMA table_info(prescriptions)", null).use { c -> while (c.moveToNext()) have.add(c.getString(1)) }
+    if ("complaint" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN complaint TEXT")
+    if ("findings" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN findings TEXT")
+    rxColumnsReady = sql
+}
+
+private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice, complaint, findings"
 
 private fun rxFrom(c: Cursor) = Prescription(
     id = c.getLong(0), patientId = c.getLong(1), visitId = c.getLong(2), date = c.getLong(3),
-    diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: ""
+    diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: "",
+    complaint = c.getString(7) ?: "", findings = c.getString(8) ?: ""
 )
 
-fun ClinicDb.getPrescriptionById(id: Long): Prescription? =
-    readableDatabase.rawQuery("SELECT $RX_COLS FROM prescriptions WHERE id = ?", arrayOf(id.toString()))
+fun ClinicDb.getPrescriptionById(id: Long): Prescription? {
+    ensureRxColumns()
+    return readableDatabase.rawQuery("SELECT $RX_COLS FROM prescriptions WHERE id = ?", arrayOf(id.toString()))
         .use { c -> if (c.moveToFirst()) rxFrom(c) else null }
+}
 
 fun ClinicDb.prescriptionsOf(patientId: Long): List<Prescription> {
+    ensureRxColumns()
     val list = mutableListOf<Prescription>()
     readableDatabase.rawQuery(
         "SELECT $RX_COLS FROM prescriptions WHERE patient_id = ? ORDER BY date DESC, id DESC",
@@ -122,6 +141,7 @@ fun ClinicDb.prescriptionsOf(patientId: Long): List<Prescription> {
 }
 
 fun ClinicDb.savePrescription(rx: Prescription): Long {
+    ensureRxColumns()
     val cv = ContentValues().apply {
         put("patient_id", rx.patientId)
         put("visit_id", rx.visitId)
@@ -129,6 +149,8 @@ fun ClinicDb.savePrescription(rx: Prescription): Long {
         put("diagnosis", rx.diagnosis)
         put("medicines", medicinesToJson(rx.medicines))
         put("advice", rx.advice)
+        put("complaint", rx.complaint)
+        put("findings", rx.findings)
     }
     return if (rx.id == 0L) {
         writableDatabase.insert("prescriptions", null, cv)
@@ -202,19 +224,22 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
     var diagnosis by remember { mutableStateOf(existing?.diagnosis ?: suggested) }
     val medicines = remember { mutableStateListOf<Medicine>().apply { addAll(existing?.medicines ?: emptyList()) } }
     var advice by remember { mutableStateOf(existing?.advice ?: "") }
+    var complaint by remember { mutableStateOf(existing?.complaint ?: "") }
+    var findings by remember { mutableStateOf(existing?.findings ?: "") }
     var templates by remember { mutableStateOf(db.rxTemplates()) }
     var editing by remember { mutableStateOf<Int?>(null) }
     var removingTemplates by remember { mutableStateOf(false) }
     var askTemplateName by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     var share by remember { mutableStateOf(false) }
-    val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank()
+    val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank() || complaint.isNotBlank() || findings.isNotBlank()
 
     fun save() {
         currentId = db.savePrescription(
             Prescription(
                 id = currentId, patientId = patientId, visitId = existing?.visitId ?: 0L, date = createdAt,
-                diagnosis = diagnosis.trim(), medicines = medicines.toList(), advice = advice.trim()
+                diagnosis = diagnosis.trim(), medicines = medicines.toList(), advice = advice.trim(),
+                complaint = complaint.trim(), findings = findings.trim()
             )
         )
         if (existing == null) db.markArrived(patientId)
@@ -314,7 +339,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
             }
         }
         val adviceCard: @Composable () -> Unit = {
-            FormCard("Advice", "Tap to add or remove, or type your own") {
+            FormCard("What we told the patient", "Advice: tap to add or remove, or type your own") {
                 val current = advice.lines().map { it.trim() }.filter { it.isNotEmpty() }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     adviceOptions.forEach { a ->
@@ -339,6 +364,8 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                         verticalArrangement = Arrangement.spacedBy(18.dp)
                     ) {
                         patientCard()
+                        ComplaintCard(complaint) { complaint = it }
+                        FindingsCard(findings) { findings = it }
                         medicinesCard()
                         templatesCard()
                     }
@@ -357,9 +384,11 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     patientCard()
+                    ComplaintCard(complaint) { complaint = it }
+                    FindingsCard(findings) { findings = it }
+                    diagnosisCard()
                     templatesCard()
                     medicinesCard()
-                    diagnosisCard()
                     adviceCard()
                 }
             }
@@ -585,6 +614,14 @@ fun prescriptionPdf(context: Context, db: ClinicDb, rxId: Long): File {
     )
     if (patient.alerts.isNotEmpty()) {
         pdf.text("Medical alerts: " + patient.alerts.joinToString(", "), 10f, PdfRed, 1, after = 8f)
+    }
+    if (rx.complaint.isNotBlank()) {
+        pdf.text("Chief complaint", 9.5f, PdfSub, 1, after = 1f)
+        pdf.text(rx.complaint, 11f, after = 10f)
+    }
+    if (rx.findings.isNotBlank()) {
+        pdf.text("On examination", 9.5f, PdfSub, 1, after = 1f)
+        pdf.text(rx.findings, 11f, after = 10f)
     }
     if (rx.diagnosis.isNotBlank()) {
         pdf.text("Diagnosis / Treatment", 9.5f, PdfSub, 1, after = 1f)
