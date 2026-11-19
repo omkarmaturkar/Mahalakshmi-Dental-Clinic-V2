@@ -1,0 +1,83 @@
+name: Tool - bottom menu on every screen
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check every line, then change MainActivity.kt
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # The lines that must be there now, and the lines that replace them
+          OLD = ['val tab = when (stack.last()) {',
+                 'is Screen.Home -> "home"',
+                 'is Screen.Patients -> "patients"',
+                 'is Screen.Schedule -> "schedule"',
+                 'is Screen.Finance -> "finance"',
+                 'else -> null',
+                 '}']
+          NEW = ['            // The bottom bar shows on every screen except the two forms, which have their own Save bar.',
+                 '            // Inside a patient file, the tab you came from stays lit up.',
+                 '            val tab = when (val top = stack.last()) {',
+                 '                is Screen.PatientForm, is Screen.RxForm -> null',
+                 '                is Screen.BackupPage, is Screen.ClinicSettings -> "none"',
+                 '                else -> when (stack.lastOrNull { tabIndexOf(it) >= 0 } ?: top) {',
+                 '                    is Screen.Patients -> "patients"',
+                 '                    is Screen.Schedule -> "schedule"',
+                 '                    is Screen.Finance -> "finance"',
+                 '                    else -> "home"',
+                 '                }',
+                 '            }']
+
+          problems = []
+          path = KT / 'MainActivity.kt'
+          lines = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+          hits = []
+          if lines is None:
+              problems.append('MainActivity.kt was not found')
+          else:
+              hits = [i for i in range(len(lines) - len(OLD) + 1)
+                      if all(lines[i + k].strip() == OLD[k] for k in range(len(OLD)))]
+              if len(hits) != 1:
+                  problems.append('MainActivity.kt: expected once, found %d times: %s' % (len(hits), ' | '.join(OLD)))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*\d+\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"\d+\.0"\s*', l)]
+          if len(code) != 1 or len(vname) != 1:
+              problems.append('app/build.gradle.kts: versionCode / versionName lines not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          lines[hits[0]:hits[0] + len(OLD)] = NEW
+          path.write_text('\n'.join(lines), encoding='utf-8')
+          version = int(re.search(r'\d+', gradle[code[0]]).group(0)) + 1
+          gradle[code[0]] = re.sub(r'\d+', str(version), gradle[code[0]], count=1)
+          gradle[vname[0]] = re.sub(r'"\d+\.0"', '"%d.0"' % version, gradle[vname[0]], count=1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('Bottom menu now shows on every screen. New version: %d' % version)
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Bottom menu on every screen except the patient and prescription forms"
+          git push
