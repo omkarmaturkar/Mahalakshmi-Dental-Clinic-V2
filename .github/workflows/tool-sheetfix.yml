@@ -1,0 +1,95 @@
+name: Tool - keep the plus sheet above the keyboard
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check every line, then change QuickActions.kt
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change in QuickActions.kt: the lines that must be there now, the lines that replace them
+          CHANGES = [
+              (['import androidx.compose.foundation.horizontalScroll'],
+               ['import androidx.compose.foundation.horizontalScroll',
+                'import androidx.compose.foundation.verticalScroll',
+                'import androidx.compose.ui.platform.LocalView',
+                'import androidx.compose.ui.window.DialogWindowProvider',
+                'import android.view.WindowManager']),
+              (['Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {'],
+               ['    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {',
+                '        // Make the sheet window shrink above the keyboard, so nothing hides behind it',
+                '        val dialogView = LocalView.current',
+                '        SideEffect {',
+                '            (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)',
+                '        }']),
+              (['.clickable(remember { MutableInteractionSource() }, indication = null) {}'],
+               ['                    .clickable(remember { MutableInteractionSource() }, indication = null) {}',
+                '                    .verticalScroll(rememberScrollState())']),
+              (['Spacer(Modifier.height(16.dp))', 'val actions = listOf('],
+               ['        if (query.isBlank()) {',
+                '        Spacer(Modifier.height(16.dp))',
+                '        val actions = listOf(']),
+              (['repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }', '}', '}'],
+               ['                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }',
+                '            }',
+                '        }',
+                '        }']),
+          ]
+
+          problems = []
+          path = KT / 'QuickActions.kt'
+          lines = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+          found = []
+          if lines is None:
+              problems.append('QuickActions.kt was not found')
+          else:
+              for old, new in CHANGES:
+                  hits = [i for i in range(len(lines) - len(old) + 1)
+                          if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+                  if len(hits) != 1:
+                      problems.append('QuickActions.kt: expected once, found %d times: %s' % (len(hits), ' | '.join(old)))
+                  else:
+                      found.append((hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*\d+\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"\d+\.0"\s*', l)]
+          if len(code) != 1 or len(vname) != 1:
+              problems.append('app/build.gradle.kts: versionCode / versionName lines not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          for start, count, new in sorted(found, key=lambda f: -f[0]):
+              lines[start:start + count] = new
+          path.write_text('\n'.join(lines), encoding='utf-8')
+          version = int(re.search(r'\d+', gradle[code[0]]).group(0)) + 1
+          gradle[code[0]] = re.sub(r'\d+', str(version), gradle[code[0]], count=1)
+          gradle[vname[0]] = re.sub(r'"\d+\.0"', '"%d.0"' % version, gradle[vname[0]], count=1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('The plus sheet now stays above the keyboard. New version: %d' % version)
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Plus sheet stays above the keyboard; actions hide while searching"
+          git push
