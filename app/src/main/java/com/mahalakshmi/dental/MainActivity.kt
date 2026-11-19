@@ -117,6 +117,7 @@ sealed class Screen {
     object Finance : Screen()
     object BackupPage : Screen()
     object ClinicSettings : Screen()
+    object FollowUps : Screen()
     data class Patients(val filter: Int = 0, val focusSearch: Boolean = false) : Screen()
     data class PatientForm(val patientId: Long = 0) : Screen()
     data class PatientDetail(val patientId: Long) : Screen()
@@ -287,6 +288,7 @@ private fun ScreenHost(
         is Screen.Patients -> TabPager(screen, db, go, open)
         is Screen.BackupPage -> BackupScreen(db, back) { open(null) }
         is Screen.ClinicSettings -> ClinicSettingsScreen(db, back)
+        is Screen.FollowUps -> FollowUpsScreen(db, go, back)
         is Screen.PatientForm -> PatientEditScreen(
             db, screen.patientId, back,
             onSaved = { id, isNew ->

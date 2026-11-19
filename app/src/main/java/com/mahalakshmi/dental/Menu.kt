@@ -91,6 +91,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
                 "Pending dues", Icons.Filled.Warning, active == "dues",
                 trailing = if (dueTotal > 0) rs(dueTotal) else null, trailingColor = Brand.Red
             ) { onSelect(Screen.Patients(filter = 1)) }
+            MenuItem("Follow-ups", HomeIcons.People, false) { onSelect(Screen.FollowUps) }
             MenuHeading("Settings")
             AppearanceRow()
             AppLockRow()

@@ -23,7 +23,7 @@ object Backup {
     private fun markDone(c: Context) = prefs(c).edit().putLong("last", System.currentTimeMillis()).apply()
 
     fun lastBackup(c: Context): Long = prefs(c).getLong("last", 0L)
-    fun zipName() = "MahalakshmiClinic_${day()}.zip"
+    fun zipName() = "MahalaxmiClinic_${day()}.zip"
 
     fun autoFolderName(c: Context): String? = prefs(c).getString("folder", null)?.let {
         Uri.parse(it).lastPathSegment?.substringAfter(':')?.ifBlank { "Selected folder" } ?: "Selected folder"

@@ -83,7 +83,7 @@ fun SplashScreen(onFinished: () -> Unit) {
             ) {
                 Image(
                     painter = painterResource(R.drawable.clinic_logo),
-                    contentDescription = "Mahalakshmi Dental Clinic",
+                    contentDescription = "Mahalaxmi Dental Clinic",
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().drawWithContent {
                         drawContent()
@@ -126,7 +126,7 @@ fun SplashScreen(onFinished: () -> Unit) {
                 }
             ) {
                 Text(
-                    "Mahalakshmi", fontWeight = FontWeight.Bold, fontSize = if (big) 42.sp else 32.sp,
+                    "Mahalaxmi", fontWeight = FontWeight.Bold, fontSize = if (big) 42.sp else 32.sp,
                     color = Color(0xFF2A302E), letterSpacing = spacing.value.sp
                 )
                 Text(

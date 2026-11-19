@@ -26,7 +26,7 @@ object DriveBackup {
     private const val API = "https://www.googleapis.com/drive/v3"
     private const val UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
     private const val FOLDER_MIME = "application/vnd.google-apps.folder"
-    private const val FOLDER_NAME = "Mahalakshmi Dental Clinic Backup"
+    private const val FOLDER_NAME = "Mahalaxmi Dental Clinic Backup"
     private val lock = Any()
 
     private fun prefs(c: Context) = c.getSharedPreferences("drive_backup", Context.MODE_PRIVATE)

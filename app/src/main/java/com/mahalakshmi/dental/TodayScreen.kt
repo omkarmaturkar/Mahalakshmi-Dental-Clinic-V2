@@ -277,7 +277,7 @@ fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
         }
         if (data.recall.isNotEmpty()) {
             add(HomeAlert(HomeIcons.People, Brand.GreenDeep, Brand.GreenSoft,
-                "${data.recall.size} due for a check-up", "Send them a reminder from the home page") {})
+                "${data.recall.size} due for a check-up", "Open Follow-ups to send reminders") { go(Screen.FollowUps) })
         }
     }
     val actions = listOf(
@@ -440,12 +440,13 @@ fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
                         spotlight()
                         Spacer(Modifier.height(16.dp))
                         RecentPatientsCard(db, go)
+                        Spacer(Modifier.height(16.dp))
+                        FollowUpsEntry(db) { go(Screen.FollowUps) }
                     }
                     Column(Modifier.weight(1f)) {
                         metrics()
                         Spacer(Modifier.height(24.dp))
                         quickSection(2)
-                        recallSection()
                     }
                 }
             } else {
@@ -454,10 +455,10 @@ fun TodayScreenContent(db: ClinicDb, go: (Screen) -> Unit) {
                     Spacer(Modifier.height(14.dp))
                     RecentPatientsCard(db, go)
                     Spacer(Modifier.height(14.dp))
+                    FollowUpsEntry(db) { go(Screen.FollowUps) }
                     metrics()
                     Spacer(Modifier.height(24.dp))
                     quickSection(4)
-                    recallSection()
                 }
             }
             Spacer(Modifier.navigationBarsPadding())

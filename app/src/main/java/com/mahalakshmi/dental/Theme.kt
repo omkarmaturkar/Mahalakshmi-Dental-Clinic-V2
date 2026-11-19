@@ -444,7 +444,7 @@ fun LogoTile(size: Dp = 52.dp) {
     ) {
         Image(
             painter = painterResource(R.drawable.clinic_logo),
-            contentDescription = "Mahalakshmi Dental Clinic",
+            contentDescription = "Mahalaxmi Dental Clinic",
             contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.2f; scaleY = 1.2f }
         )
@@ -457,7 +457,7 @@ fun BrandRow(compact: Boolean = false) {
         LogoTile(if (compact) 46.dp else 54.dp)
         Spacer(Modifier.width(12.dp))
         Column {
-            Text("Mahalakshmi", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Brand.Charcoal, lineHeight = 22.sp)
+            Text("Mahalaxmi", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Brand.Charcoal, lineHeight = 22.sp)
             Text(
                 "DENTAL CLINIC", fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
                 color = Brand.GreenDeep, letterSpacing = 2.sp, lineHeight = 14.sp

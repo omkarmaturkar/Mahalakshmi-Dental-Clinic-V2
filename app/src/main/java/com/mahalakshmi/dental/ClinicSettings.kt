@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-const val DEFAULT_CLINIC_NAME = "Mahalakshmi Dental Clinic"
+const val DEFAULT_CLINIC_NAME = "Mahalaxmi Dental Clinic"
 const val DEFAULT_FOOTER = "Thank you for visiting. Wishing you a healthy smile!"
 
 private const val DOCTORS_TABLE =

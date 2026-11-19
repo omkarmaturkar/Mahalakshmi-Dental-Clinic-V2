@@ -66,7 +66,7 @@ object CrashGuard {
         val version = runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         }.getOrNull() ?: "?"
-        val text = "Mahalakshmi Dental Clinic – problem report\n" +
+        val text = "Mahalaxmi Dental Clinic – problem report\n" +
             "App version: $version\n" +
             "Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})\n" +
             "Device: ${Build.MANUFACTURER} ${Build.MODEL}\n\n" + trace
