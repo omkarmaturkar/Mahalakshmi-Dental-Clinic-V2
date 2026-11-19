@@ -184,12 +184,17 @@ fun ClinicApp(db: ClinicDb) {
             val menuWidth = if (maxWidth >= 1200.dp) 280.dp else 250.dp
             val entry = NavEntry(stack.size, stack.last())
             val section = stack.getOrNull(1) ?: Screen.Home
-            val tab = when (stack.last()) {
-                is Screen.Home -> "home"
-                is Screen.Patients -> "patients"
-                is Screen.Schedule -> "schedule"
-                is Screen.Finance -> "finance"
-                else -> null
+            // The bottom bar shows on every screen except the two forms, which have their own Save bar.
+            // Inside a patient file, the tab you came from stays lit up.
+            val tab = when (val top = stack.last()) {
+                is Screen.PatientForm, is Screen.RxForm -> null
+                is Screen.BackupPage, is Screen.ClinicSettings -> "none"
+                else -> when (stack.lastOrNull { tabIndexOf(it) >= 0 } ?: top) {
+                    is Screen.Patients -> "patients"
+                    is Screen.Schedule -> "schedule"
+                    is Screen.Finance -> "finance"
+                    else -> "home"
+                }
             }
             val menu: @Composable () -> Unit = {
                 AppMenu(db, section, permanent = wide) { target ->
