@@ -82,6 +82,7 @@ fun AppMenu(db: ClinicDb, section: Screen, permanent: Boolean, onSelect: (Screen
         }
         HorizontalDivider(color = Brand.Line)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 10.dp)) {
+            LocalQuickActions.current?.let { quick -> MenuItem("Quick actions", Icons.Filled.Add, false) { quick() } }
             MenuItem("Home", HomeIcons.Home, active == "today") { onSelect(Screen.Home) }
             MenuItem("Patients", HomeIcons.People, active == "patients", trailing = "${everyone.size}") { onSelect(Screen.Patients()) }
             MenuItem("Schedule", HomeIcons.Calendar, active == "schedule") { onSelect(Screen.Schedule) }
@@ -188,6 +189,7 @@ fun BottomNavBar(current: String, onSelect: (Screen) -> Unit) {
         ) {
             NavPill("Home", HomeIcons.Home, current == "home") { onSelect(Screen.Home) }
             NavPill("Patients", HomeIcons.People, current == "patients") { onSelect(Screen.Patients()) }
+            LocalQuickActions.current?.let { QuickPlusButton(it) }
             NavPill("Schedule", HomeIcons.Calendar, current == "schedule") { onSelect(Screen.Schedule) }
             NavPill("Finance", HomeIcons.Rupee, current == "finance") { onSelect(Screen.Finance) }
         }

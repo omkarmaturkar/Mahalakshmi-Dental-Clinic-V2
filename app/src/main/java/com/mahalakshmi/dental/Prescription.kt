@@ -219,6 +219,8 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
     if (patient == null || (rxId != 0L && existing == null)) return
     val suggested = remember { if (existing == null) db.suggestedDiagnosis(patientId) else "" }
     val createdAt = remember { existing?.date ?: System.currentTimeMillis() }
+    val last = remember { if (existing == null) db.prescriptionsOf(patientId).firstOrNull() else null }
+    var repeated by remember { mutableStateOf(false) }
 
     var currentId by remember { mutableLongStateOf(existing?.id ?: 0L) }
     var diagnosis by remember { mutableStateOf(existing?.diagnosis ?: suggested) }
@@ -288,6 +290,21 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                             fontSize = 13.sp, color = Brand.Red, fontWeight = FontWeight.Medium
                         )
                     }
+                }
+            }
+        }
+        val repeatCard: @Composable () -> Unit = {
+            if (last != null && !repeated) {
+                RepeatLastButton(fmtDate(last.date), last.medicines.size) {
+                    last.medicines.forEach { m -> if (medicines.none { it.name.equals(m.name, ignoreCase = true) }) medicines.add(m) }
+                    val lines = advice.lines().map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                    last.advice.lines().map { it.trim() }.filter { it.isNotEmpty() && it !in lines }.forEach { lines.add(it) }
+                    advice = lines.joinToString("\n")
+                    if (diagnosis.isBlank()) {
+                        diagnosis = last.diagnosis
+                    }
+                    repeated = true
+                    notify("Last prescription copied ✓")
                 }
             }
         }
@@ -366,6 +383,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                         patientCard()
                         ComplaintCard(complaint) { complaint = it }
                         FindingsCard(findings) { findings = it }
+                        repeatCard()
                         medicinesCard()
                         templatesCard()
                     }
@@ -387,6 +405,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                     ComplaintCard(complaint) { complaint = it }
                     FindingsCard(findings) { findings = it }
                     diagnosisCard()
+                    repeatCard()
                     templatesCard()
                     medicinesCard()
                     adviceCard()

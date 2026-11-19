@@ -177,8 +177,9 @@ fun ClinicApp(db: ClinicDb) {
 
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var quickOpen by remember { mutableStateOf(false) }
 
-    CompositionLocalProvider(LocalNotify provides notify) {
+    CompositionLocalProvider(LocalNotify provides notify, LocalGo provides go, LocalQuickActions provides { scope.launch { drawer.close() }; quickOpen = true }) {
         BoxWithConstraints(Modifier.fillMaxSize().background(Brand.Bg)) {
             val wide = maxWidth >= 900.dp
             val menuWidth = if (maxWidth >= 1200.dp) 280.dp else 250.dp
@@ -239,6 +240,7 @@ fun ClinicApp(db: ClinicDb) {
                 }
             }
 
+            if (quickOpen) QuickActionsHost(db, go) { quickOpen = false }
             AnimatedVisibility(
                 visible = message != null,
                 enter = slideInVertically { -it } + fadeIn(),

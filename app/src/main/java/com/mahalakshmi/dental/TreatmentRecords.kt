@@ -318,6 +318,18 @@ fun TreatmentRecordsCard(db: ClinicDb, patientId: Long, openNew: Boolean, onOpen
     var showAll by remember { mutableStateOf(false) }
     var pickDay by remember { mutableStateOf(false) }
 
+    // Opened from an OPD No. search: open the record of that visit once the list is loaded
+    LaunchedEffect(records) {
+        if (RecordJump.patientId == patientId && RecordJump.day >= 0) {
+            records.firstOrNull { it.day == RecordJump.day }?.let { r ->
+                addFirst = false
+                openId = r.id
+            }
+            RecordJump.patientId = 0L
+            RecordJump.day = -1L
+        }
+    }
+
     fun startNew(day: Long) {
         val id = db.txRecordForDay(patientId, day)
         addFirst = records.firstOrNull { it.id == id }?.treatments.isNullOrEmpty()
@@ -459,6 +471,9 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
     var receiptFor by remember { mutableStateOf<Long?>(null) }
     var pdf by remember { mutableStateOf<String?>(null) }
     var moveDay by remember { mutableStateOf(false) }
+    var finish by remember { mutableStateOf(false) }
+    var booking by remember { mutableStateOf(false) }
+    val go = LocalGo.current
 
     fun cycleStatus(t: Treatment) {
         val next = when (t.status) {
@@ -469,6 +484,9 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
         db.saveTreatment(t.copy(status = next))
         DataBus.changed()
         notify("${t.name}: ${statusLabel(next)} ✓")
+        if (next == STATUS_DONE && record?.day == todayEpochDay()) {
+            finish = true
+        }
     }
 
     // Tap on a tooth: open the unfinished treatment on it, or add a new treatment for that tooth
@@ -589,6 +607,9 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
                                 ) { pdf = "estimate" }
                             }
                         }
+                        if (record.day == todayEpochDay() && record.treatments.isNotEmpty()) {
+                            GradientButton("Finish visit", Modifier.fillMaxWidth(), Icons.Filled.Check, height = 52.dp) { finish = true }
+                        }
                         SoftButton(
                             "Delete this record", Icons.Filled.Delete, Modifier.fillMaxWidth(),
                             bg = Brand.RedSoft, fg = Brand.Red
@@ -614,6 +635,11 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             },
             onSaved = { msg ->
                 db.claimLooseTreatments(patientId, recordId)
+                val doneBefore = record?.treatments?.count { it.status == STATUS_DONE } ?: 0
+                val now = runCatching { db.txRecordsOf(patientId).firstOrNull { it.id == recordId } }.getOrNull()
+                if (now != null && now.day == todayEpochDay() && now.treatments.count { it.status == STATUS_DONE } > doneBefore) {
+                    finish = true
+                }
                 adding = false
                 editing = null
                 presetTooth = null
@@ -633,6 +659,39 @@ private fun TxDialog(db: ClinicDb, patientId: Long, recordId: Long, addFirst: Bo
             },
             onDismiss = { askEdit = null }
         )
+    }
+    if (finish && record != null) {
+        FinishVisitSheet(
+            patientName = patient?.name.orEmpty(),
+            due = if (record.left > 0.01) record.left else balance,
+            onDismiss = { finish = false },
+            onPay = {
+                finish = false
+                receive = true
+            },
+            onRx = {
+                finish = false
+                go(Screen.RxForm(patientId, 0))
+                onClose()
+            },
+            onBook = {
+                finish = false
+                booking = true
+            },
+            onBill = {
+                finish = false
+                pdf = "bill"
+            }
+        )
+    }
+    if (booking) {
+        val existing = remember { db.nextBooking(patientId) }
+        BookingDialog(initial = existing, defaultReason = "Check-up", onDismiss = { booking = false }, onCancelBooking = null) { day, time, why ->
+            db.saveBooking(patientId, day, time, why)
+            booking = false
+            DataBus.changed()
+            notify("Next visit booked ✓")
+        }
     }
     if (moveDay && record != null) {
         DatePick(record.day, onDismiss = { moveDay = false }) { day ->
