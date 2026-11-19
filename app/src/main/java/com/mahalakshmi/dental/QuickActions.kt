@@ -3,6 +3,10 @@ package com.mahalakshmi.dental
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import android.view.WindowManager
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -88,6 +92,11 @@ private fun ClinicDb.recentPatientIds(limit: Int): List<Long> {
 @Composable
 private fun BottomSheetFrame(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // Make the sheet window shrink above the keyboard, so nothing hides behind it
+        val dialogView = LocalView.current
+        SideEffect {
+            (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
         Box(
             Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
             contentAlignment = Alignment.BottomCenter
@@ -96,6 +105,7 @@ private fun BottomSheetFrame(onDismiss: () -> Unit, content: @Composable ColumnS
                 Modifier.widthIn(max = 560.dp).fillMaxWidth()
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Brand.Surface)
                     .clickable(remember { MutableInteractionSource() }, indication = null) {}
+                    .verticalScroll(rememberScrollState())
                     .navigationBarsPadding().padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
             ) {
                 Box(
@@ -202,6 +212,7 @@ private fun QuickSheet(
                 }
             }
         }
+        if (query.isBlank()) {
         Spacer(Modifier.height(16.dp))
         val actions = listOf(
             Triple("new", "New patient", HomeIcons.PersonAdd),
@@ -215,6 +226,7 @@ private fun QuickSheet(
                 row.forEach { (key, label, icon) -> QuickActionTile(label, icon, Modifier.weight(1f)) { onAction(key) } }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
+        }
         }
     }
 }
