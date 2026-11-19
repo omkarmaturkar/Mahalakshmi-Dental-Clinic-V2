@@ -1,0 +1,227 @@
+name: Tool - complaint and findings on prescriptions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the new file RxNotes.kt
+        run: |
+          cat > app/src/main/java/com/mahalakshmi/dental/RxNotes.kt <<'KT'
+          @file:OptIn(ExperimentalLayoutApi::class)
+
+          package com.mahalakshmi.dental
+
+          import androidx.compose.foundation.layout.Arrangement
+          import androidx.compose.foundation.layout.ExperimentalLayoutApi
+          import androidx.compose.foundation.layout.FlowRow
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+
+          // ───────────── What the patient told us / what we found ─────────────
+          private val complaintOptions = listOf(
+              "Pain", "Swelling", "Sensitivity", "Bleeding gums", "Broken tooth", "Loose tooth",
+              "Food lodging", "Bad breath", "Missing tooth", "Check-up", "Cleaning", "Braces"
+          )
+          private val sinceOptions = listOf(
+              "Today" to "since today", "2–3 days" to "since 2–3 days", "1 week" to "since 1 week",
+              "1 month" to "since 1 month", "Long time" to "for a long time"
+          )
+
+          private fun tidyComplaint(s: String): String =
+              s.replace(Regex("(\\s*,\\s*)+"), ", ").replace(Regex("\\s{2,}"), " ")
+                  .trim().trim(',').trim().replaceFirstChar { it.uppercase() }
+
+          /** Adds the word (before any "since …" part) or takes it out again. */
+          private fun toggleComplaint(text: String, word: String): String {
+              val at = text.indexOf(word, ignoreCase = true)
+              if (at >= 0) return tidyComplaint(text.removeRange(at, at + word.length))
+              val t = text.trim()
+              if (t.isEmpty()) return word
+              val sinceAt = sinceOptions.map { (_, p) -> t.indexOf(" $p", ignoreCase = true) }.filter { it >= 0 }.minOrNull()
+              return if (sinceAt != null) tidyComplaint(t.substring(0, sinceAt) + ", " + word.lowercase() + t.substring(sinceAt))
+              else "$t, ${word.lowercase()}"
+          }
+
+          /** Sets how long it has been (only one), or takes it out when tapped again. */
+          private fun toggleSince(text: String, phrase: String): String {
+              val had = text.contains(phrase, ignoreCase = true)
+              var t = text
+              sinceOptions.forEach { (_, p) -> t = t.replace(p, "", ignoreCase = true) }
+              t = tidyComplaint(t)
+              return when {
+                  had -> t
+                  t.isEmpty() -> phrase.replaceFirstChar { it.uppercase() }
+                  else -> "$t $phrase"
+              }
+          }
+
+          /** Chief complaint: chips fill in the sentence; the doctor can type anything. */
+          @Composable
+          fun ComplaintCard(text: String, onChange: (String) -> Unit) {
+              FormCard("What the patient told us", "Chief complaint: tap to fill in, or type in the patient's words") {
+                  FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      complaintOptions.forEach { c ->
+                          ChoiceChip(c, text.contains(c, ignoreCase = true)) { onChange(toggleComplaint(text, c)) }
+                      }
+                  }
+                  Text("Since", fontSize = 13.sp, color = Brand.Sub, fontWeight = FontWeight.Medium)
+                  FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      sinceOptions.forEach { (label, phrase) ->
+                          ChoiceChip(label, text.contains(phrase, ignoreCase = true)) { onChange(toggleSince(text, phrase)) }
+                      }
+                  }
+                  AppField(text, onChange, "In the patient's words", lines = 2)
+              }
+          }
+
+          /** On examination: optional findings. */
+          @Composable
+          fun FindingsCard(text: String, onChange: (String) -> Unit) {
+              FormCard("What we found", "On examination (optional)") {
+                  AppField(text, onChange, "Findings, e.g. deep cavity in 46, tender on tapping", lines = 2)
+              }
+          }
+          KT
+
+      - name: Check every line, then change Prescription.kt
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change in Prescription.kt: the lines that must be there now, the lines that replace them
+          CHANGES = [
+              (['val advice: String = ""', ')'],
+               ['    val advice: String = "",', '    val complaint: String = "",', '    val findings: String = ""', ')']),
+              (['private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice"'],
+               ['/** The patient\'s complaint and the examination findings: columns added to the prescriptions table the first time. */',
+                'private var rxColumnsReady: Any? = null',
+                '',
+                'private fun ClinicDb.ensureRxColumns() {',
+                '    val sql = writableDatabase',
+                '    if (rxColumnsReady === sql) return',
+                '    val have = HashSet<String>()',
+                '    sql.rawQuery("PRAGMA table_info(prescriptions)", null).use { c -> while (c.moveToNext()) have.add(c.getString(1)) }',
+                '    if ("complaint" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN complaint TEXT")',
+                '    if ("findings" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN findings TEXT")',
+                '    rxColumnsReady = sql',
+                '}',
+                '',
+                'private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice, complaint, findings"']),
+              (['diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: ""'],
+               ['    diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: "",',
+                '    complaint = c.getString(7) ?: "", findings = c.getString(8) ?: ""']),
+              (['fun ClinicDb.getPrescriptionById(id: Long): Prescription? =',
+                'readableDatabase.rawQuery("SELECT $RX_COLS FROM prescriptions WHERE id = ?", arrayOf(id.toString()))',
+                '.use { c -> if (c.moveToFirst()) rxFrom(c) else null }'],
+               ['fun ClinicDb.getPrescriptionById(id: Long): Prescription? {',
+                '    ensureRxColumns()',
+                '    return readableDatabase.rawQuery("SELECT $RX_COLS FROM prescriptions WHERE id = ?", arrayOf(id.toString()))',
+                '        .use { c -> if (c.moveToFirst()) rxFrom(c) else null }',
+                '}']),
+              (['fun ClinicDb.prescriptionsOf(patientId: Long): List<Prescription> {'],
+               ['fun ClinicDb.prescriptionsOf(patientId: Long): List<Prescription> {', '    ensureRxColumns()']),
+              (['fun ClinicDb.savePrescription(rx: Prescription): Long {'],
+               ['fun ClinicDb.savePrescription(rx: Prescription): Long {', '    ensureRxColumns()']),
+              (['put("advice", rx.advice)'],
+               ['        put("advice", rx.advice)', '        put("complaint", rx.complaint)', '        put("findings", rx.findings)']),
+              (['var advice by remember { mutableStateOf(existing?.advice ?: "") }'],
+               ['    var advice by remember { mutableStateOf(existing?.advice ?: "") }',
+                '    var complaint by remember { mutableStateOf(existing?.complaint ?: "") }',
+                '    var findings by remember { mutableStateOf(existing?.findings ?: "") }']),
+              (['val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank()'],
+               ['    val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank() || complaint.isNotBlank() || findings.isNotBlank()']),
+              (['diagnosis = diagnosis.trim(), medicines = medicines.toList(), advice = advice.trim()'],
+               ['                diagnosis = diagnosis.trim(), medicines = medicines.toList(), advice = advice.trim(),',
+                '                complaint = complaint.trim(), findings = findings.trim()']),
+              (['FormCard("Advice", "Tap to add or remove, or type your own") {'],
+               ['            FormCard("What we told the patient", "Advice: tap to add or remove, or type your own") {']),
+              (['patientCard()', 'medicinesCard()', 'templatesCard()'],
+               ['                        patientCard()',
+                '                        ComplaintCard(complaint) { complaint = it }',
+                '                        FindingsCard(findings) { findings = it }',
+                '                        medicinesCard()',
+                '                        templatesCard()']),
+              (['patientCard()', 'templatesCard()', 'medicinesCard()', 'diagnosisCard()', 'adviceCard()'],
+               ['                    patientCard()',
+                '                    ComplaintCard(complaint) { complaint = it }',
+                '                    FindingsCard(findings) { findings = it }',
+                '                    diagnosisCard()',
+                '                    templatesCard()',
+                '                    medicinesCard()',
+                '                    adviceCard()']),
+              (['if (rx.diagnosis.isNotBlank()) {'],
+               ['    if (rx.complaint.isNotBlank()) {',
+                '        pdf.text("Chief complaint", 9.5f, PdfSub, 1, after = 1f)',
+                '        pdf.text(rx.complaint, 11f, after = 10f)',
+                '    }',
+                '    if (rx.findings.isNotBlank()) {',
+                '        pdf.text("On examination", 9.5f, PdfSub, 1, after = 1f)',
+                '        pdf.text(rx.findings, 11f, after = 10f)',
+                '    }',
+                '    if (rx.diagnosis.isNotBlank()) {']),
+          ]
+
+          problems = []
+          notes = KT / 'RxNotes.kt'
+          if not notes.is_file() or 'fun ComplaintCard(' not in notes.read_text(encoding='utf-8'):
+              problems.append('RxNotes.kt was not written')
+
+          path = KT / 'Prescription.kt'
+          lines = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+          found = []
+          if lines is None:
+              problems.append('Prescription.kt was not found')
+          else:
+              for old, new in CHANGES:
+                  hits = [i for i in range(len(lines) - len(old) + 1)
+                          if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+                  if len(hits) != 1:
+                      problems.append('Prescription.kt: expected once, found %d times: %s' % (len(hits), ' | '.join(old)))
+                  else:
+                      found.append((hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*\d+\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"\d+\.0"\s*', l)]
+          if len(code) != 1 or len(vname) != 1:
+              problems.append('app/build.gradle.kts: versionCode / versionName lines not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          if 'PRESCRIPTION DETAILS' not in '\n'.join(lines):
+              print('Note: the Patient ID / OPD No. box is not on prescriptions yet. Run tool-rx.yml as well.')
+          for start, count, new in sorted(found, key=lambda f: -f[0]):
+              lines[start:start + count] = new
+          path.write_text('\n'.join(lines), encoding='utf-8')
+          version = int(re.search(r'\d+', gradle[code[0]]).group(0)) + 1
+          gradle[code[0]] = re.sub(r'\d+', str(version), gradle[code[0]], count=1)
+          gradle[vname[0]] = re.sub(r'"\d+\.0"', '"%d.0"' % version, gradle[vname[0]], count=1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('Complaint and findings added to prescriptions. New version: %d' % version)
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Prescriptions: what the patient told us (chief complaint) and what we found (on examination)"
+          git push
