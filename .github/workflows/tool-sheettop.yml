@@ -1,0 +1,96 @@
+name: Tool - search sheet at the top
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check every line, then change QuickActions.kt
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          KT = pathlib.Path('app/src/main/java/com/mahalakshmi/dental')
+          GRADLE = pathlib.Path('app/build.gradle.kts')
+
+          # Each change in QuickActions.kt: the lines that must be there now, the lines that replace them
+          CHANGES = [
+              (['private fun BottomSheetFrame(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {'],
+               ['private fun BottomSheetFrame(onDismiss: () -> Unit, top: Boolean = false, content: @Composable ColumnScope.() -> Unit) {']),
+              (['// Make the sheet window shrink above the keyboard, so nothing hides behind it'],
+               ['        // The keyboard must never cover the sheet: the search sheet sits at the top of the screen,',
+                '        // and the window keeps the phone\'s normal keyboard behaviour']),
+              (['(dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)'],
+               ['            (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)']),
+              (['contentAlignment = Alignment.BottomCenter'],
+               ['            contentAlignment = if (top) Alignment.TopCenter else Alignment.BottomCenter']),
+              (['.clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Brand.Surface)'],
+               ['                    .clip(if (top) RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))',
+                '                    .background(Brand.Surface)']),
+              (['.navigationBarsPadding().padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)'],
+               ['                    .then(if (top) Modifier.statusBarsPadding() else Modifier.navigationBarsPadding())',
+                '                    .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)']),
+              (['Box(', 'Modifier.align(Alignment.CenterHorizontally).size(width = 40.dp, height = 4.dp)'],
+               ['                if (!top) {',
+                '                Box(',
+                '                    Modifier.align(Alignment.CenterHorizontally).size(width = 40.dp, height = 4.dp)']),
+              (['Spacer(Modifier.height(14.dp))', 'content()'],
+               ['                Spacer(Modifier.height(14.dp))',
+                '                }',
+                '                content()']),
+              (['BottomSheetFrame(onDismiss) {', 'Row('],
+               ['    BottomSheetFrame(onDismiss, top = true) {',
+                '        Row(']),
+          ]
+
+          problems = []
+          path = KT / 'QuickActions.kt'
+          lines = path.read_text(encoding='utf-8').split('\n') if path.is_file() else None
+          found = []
+          if lines is None:
+              problems.append('QuickActions.kt was not found')
+          else:
+              for old, new in CHANGES:
+                  hits = [i for i in range(len(lines) - len(old) + 1)
+                          if all(lines[i + k].strip() == old[k] for k in range(len(old)))]
+                  if len(hits) != 1:
+                      problems.append('QuickActions.kt: expected once, found %d times: %s' % (len(hits), ' | '.join(old)))
+                  else:
+                      found.append((hits[0], len(old), new))
+
+          gradle = GRADLE.read_text(encoding='utf-8').split('\n') if GRADLE.is_file() else []
+          code = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionCode\s*=\s*\d+\s*', l)]
+          vname = [i for i, l in enumerate(gradle) if re.fullmatch(r'\s*versionName\s*=\s*"\d+\.0"\s*', l)]
+          if len(code) != 1 or len(vname) != 1:
+              problems.append('app/build.gradle.kts: versionCode / versionName lines not found exactly once')
+
+          if problems:
+              print('NOTHING WAS CHANGED')
+              for p in problems:
+                  print(' - ' + p)
+              sys.exit(1)
+
+          for start, count, new in sorted(found, key=lambda f: -f[0]):
+              lines[start:start + count] = new
+          path.write_text('\n'.join(lines), encoding='utf-8')
+          version = int(re.search(r'\d+', gradle[code[0]]).group(0)) + 1
+          gradle[code[0]] = re.sub(r'\d+', str(version), gradle[code[0]], count=1)
+          gradle[vname[0]] = re.sub(r'"\d+\.0"', '"%d.0"' % version, gradle[vname[0]], count=1)
+          GRADLE.write_text('\n'.join(gradle), encoding='utf-8')
+          print('The search sheet now opens at the top. New version: %d' % version)
+          PY
+
+      - name: Save the changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Plus search sheet opens at the top so the keyboard never covers it"
+          git push
