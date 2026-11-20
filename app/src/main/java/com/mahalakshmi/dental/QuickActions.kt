@@ -90,29 +90,34 @@ private fun ClinicDb.recentPatientIds(limit: Int): List<Long> {
 
 /** A sheet that sits at the bottom of the screen; tapping outside closes it. */
 @Composable
-private fun BottomSheetFrame(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+private fun BottomSheetFrame(onDismiss: () -> Unit, top: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        // Make the sheet window shrink above the keyboard, so nothing hides behind it
+        // The keyboard must never cover the sheet: the search sheet sits at the top of the screen,
+        // and the window keeps the phone's normal keyboard behaviour
         val dialogView = LocalView.current
         SideEffect {
-            (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+            (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
         }
         Box(
             Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-            contentAlignment = Alignment.BottomCenter
+            contentAlignment = if (top) Alignment.TopCenter else Alignment.BottomCenter
         ) {
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth()
-                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(Brand.Surface)
+                    .clip(if (top) RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .background(Brand.Surface)
                     .clickable(remember { MutableInteractionSource() }, indication = null) {}
                     .verticalScroll(rememberScrollState())
-                    .navigationBarsPadding().padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
+                    .then(if (top) Modifier.statusBarsPadding() else Modifier.navigationBarsPadding())
+                    .padding(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp)
             ) {
+                if (!top) {
                 Box(
                     Modifier.align(Alignment.CenterHorizontally).size(width = 40.dp, height = 4.dp)
                         .clip(RoundedCornerShape(2.dp)).background(Brand.Line)
                 )
                 Spacer(Modifier.height(14.dp))
+                }
                 content()
             }
         }
@@ -167,7 +172,7 @@ private fun QuickSheet(
         if (query.isBlank()) emptyList() else filterPatients(everyone, query, 0, emptySet()).take(5)
     }
 
-    BottomSheetFrame(onDismiss) {
+    BottomSheetFrame(onDismiss, top = true) {
         Row(
             Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(16.dp)).background(Brand.Soft)
                 .padding(horizontal = 14.dp),
