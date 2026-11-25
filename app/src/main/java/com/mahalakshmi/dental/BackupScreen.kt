@@ -1,5 +1,9 @@
 package com.mahalakshmi.dental
 
+import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,14 +32,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 @Composable
 fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
@@ -45,6 +47,8 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
 
     var busy by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
+    var choices by remember { mutableStateOf<List<DriveBackupItem>?>(null) }
+    val deviceLabel = remember { DriveBackup.deviceName(context) }
 
     var folder by remember { mutableStateOf(Backup.autoFolderName(context)) }
     var localLast by remember { mutableLongStateOf(Backup.lastBackup(context)) }
@@ -118,19 +122,40 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
         }
     }
 
-    fun driveRestore() {
+    fun driveRestore(item: DriveBackupItem) {
         withDriveToken { token ->
-            work("Restoring from Google Drive…", { progress -> DriveBackup.restore(context, db, token, progress) }) { r ->
+            work("Restoring from Google Drive…", { progress -> DriveBackup.restoreItem(context, db, token, item, progress) }) { r ->
                 when {
                     r.getOrNull() == true -> {
-                        notify("Data restored from Google Drive ✓")
+                        notify("Data restored ✓  The app will restart now")
                         onRestored()
+                        restartAfterRestore(context)
                     }
                     r.isFailure -> {
                         notify(friendlyError(r.exceptionOrNull()))
                     }
                     else -> {
+                        notify("This backup could not be opened")
+                    }
+                }
+            }
+        }
+    }
+
+    // Shows every backup on Google Drive, with the phone or tablet it came from
+    fun chooseDriveBackup() {
+        withDriveToken { token ->
+            work("Looking for backups…", { _ -> DriveBackup.listBackups(context, token) }) { r ->
+                val list = r.getOrNull().orEmpty()
+                when {
+                    r.isFailure -> {
+                        notify(friendlyError(r.exceptionOrNull()))
+                    }
+                    list.isEmpty() -> {
                         notify("No backup found on this Google account")
+                    }
+                    else -> {
+                        choices = list
                     }
                 }
             }
@@ -141,15 +166,15 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
         withDriveToken { token ->
             work("Connecting to Google Drive…", { _ ->
                 DriveBackup.markConnected(context, token)
-                if (db.patientCount() == 0) DriveBackup.latestBackupDate(token) else null
+                if (db.patientCount() == 0) DriveBackup.listBackups(context, token) else emptyList()
             }) { r ->
-                val found = r.getOrNull()
+                val found = r.getOrNull().orEmpty()
                 when {
                     r.isFailure -> {
                         notify(friendlyError(r.exceptionOrNull()))
                     }
-                    found != null -> {
-                        confirm = "We found a backup from ${prettyDate(found)} on your Google Drive. Restore it now?" to { driveRestore() }
+                    found.isNotEmpty() -> {
+                        choices = found
                     }
                     db.patientCount() > 0 -> {
                         notify("Google Drive connected ✓")
@@ -199,8 +224,9 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             confirm = "Everything in the app will be replaced with the data from this backup folder." to {
                 work("Restoring…", { _ -> Backup.restoreFromFolder(context, db, uri) }) { r ->
                     if (r.getOrNull() == true) {
-                        notify("Data restored ✓")
+                        notify("Data restored ✓  The app will restart now")
                         onRestored()
+                        restartAfterRestore(context)
                     } else {
                         notify("This is not a valid clinic backup")
                     }
@@ -213,8 +239,9 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             confirm = "Everything in the app will be replaced with the data from this backup file." to {
                 work("Restoring…", { _ -> Backup.restoreZip(context, db, uri) }) { r ->
                     if (r.getOrNull() == true) {
-                        notify("Data restored ✓")
+                        notify("Data restored ✓  The app will restart now")
                         onRestored()
+                        restartAfterRestore(context)
                     } else {
                         notify("This is not a valid clinic backup")
                     }
@@ -262,6 +289,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                         )
                         GradientButton("Connect Google Drive", Modifier.fillMaxWidth(), AppIcons.Cloud) { connectDrive() }
                     } else {
+                        InfoLine("This device", deviceLabel)
                         InfoLine(
                             "Last backup",
                             if (driveLast > 0L) "${fmtDateTime(driveLast)}  (${agoText(driveLast)})" else "Not yet"
@@ -269,7 +297,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             GradientButton("Back up now", Modifier.weight(1f), AppIcons.Cloud) { driveBackupNow() }
                             SoftButton("Restore", Icons.Filled.Refresh, Modifier.weight(1f), height = 56.dp) {
-                                confirm = "Everything in the app will be replaced with your latest Google Drive backup." to { driveRestore() }
+                                chooseDriveBackup()
                             }
                         }
                         HorizontalDivider(color = Brand.Line)
@@ -368,6 +396,19 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             onDismiss = { confirm = null }
         )
     }
+    choices?.let { list ->
+        BackupChoiceDialog(
+            list,
+            onPick = { item ->
+                choices = null
+                val whenText = if (item.time > 0L) fmtDateTime(item.time) else "an earlier date"
+                confirm = "Everything in the app will be replaced with the backup from ${item.device} ($whenText)." to {
+                    driveRestore(item)
+                }
+            },
+            onDismiss = { choices = null }
+        )
+    }
     busy?.let { BusyDialog(it) }
 }
 
@@ -379,12 +420,6 @@ private fun InfoLine(label: String, value: String) {
     }
 }
 
-private fun prettyDate(iso: String): String = try {
-    LocalDate.parse(iso).format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.getDefault()))
-} catch (e: Exception) {
-    iso
-}
-
 private fun friendlyError(e: Throwable?): String {
     val msg = e?.message ?: ""
     return when {
@@ -392,4 +427,75 @@ private fun friendlyError(e: Throwable?): String {
         msg.contains("401") || msg.contains("403") -> "Google Drive refused access. Tap Disconnect, then connect again."
         else -> "Something went wrong. Please check the internet and try again."
     }
+}
+
+// All backups on Google Drive, newest first, so the right one can be picked
+@Composable
+private fun BackupChoiceDialog(items: List<DriveBackupItem>, onPick: (DriveBackupItem) -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brand.Surface).padding(20.dp)
+        ) {
+            Text("Choose a backup", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Each phone and tablet keeps its own backups. Tap the one to bring back.",
+                fontSize = 14.sp, color = Brand.Sub
+            )
+            Spacer(Modifier.height(14.dp))
+            Column(
+                Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items.forEach { item ->
+                    val count = when {
+                        item.patients < 0 -> ""
+                        item.patients == 1 -> "  ·  1 patient"
+                        else -> "  ·  ${item.patients} patients"
+                    }
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brand.Soft)
+                            .clickable { onPick(item) }.padding(14.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                item.device, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (item.thisDevice) {
+                                Text("This device", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Brand.GreenDeep)
+                            }
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            (if (item.time > 0L) fmtDateTime(item.time) else "Date not known") + count,
+                            fontSize = 14.sp, color = Brand.Sub
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Cancel", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Brand.Ink,
+                modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(10.dp)).clickable { onDismiss() }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
+// Starts the app fresh after a restore, so every screen shows the restored data
+private fun restartAfterRestore(context: Context) {
+    val app = context.applicationContext
+    Handler(Looper.getMainLooper()).postDelayed({
+        try {
+            val component = app.packageManager.getLaunchIntentForPackage(app.packageName)?.component
+            if (component != null) {
+                app.startActivity(Intent.makeRestartActivityTask(component))
+                Runtime.getRuntime().exit(0)
+            }
+        } catch (e: Exception) {
+            // If the restart does not work, the restored data is still shown
+        }
+    }, 1500L)
 }

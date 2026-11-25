@@ -3,6 +3,8 @@ package com.mahalakshmi.dental
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import android.provider.Settings
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
@@ -15,12 +17,28 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 data class DriveFile(val id: String, val name: String, val size: Long)
 
-/** Google Drive backup – works like WhatsApp: one folder in your Google Drive, updated automatically. */
+/** One backup on Google Drive, with the phone or tablet it came from. */
+data class DriveBackupItem(
+    val id: String,
+    val name: String,
+    val folderId: String,
+    val device: String,
+    val patients: Int,
+    val time: Long,
+    val thisDevice: Boolean
+)
+
+/**
+ * Google Drive backup – works like WhatsApp: one folder in your Google Drive, updated automatically.
+ * Every phone and tablet keeps its own copies, so one device never replaces another device's backup.
+ */
 object DriveBackup {
     private const val SCOPE = "https://www.googleapis.com/auth/drive.file"
     private const val API = "https://www.googleapis.com/drive/v3"
@@ -91,27 +109,59 @@ object DriveBackup {
         return useMobileData(c) || caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
+    // ───── This phone or tablet ─────
+    /** A short code that stays the same on this phone or tablet. */
+    private fun deviceId(c: Context): String {
+        val androidId = try {
+            Settings.Secure.getString(c.contentResolver, Settings.Secure.ANDROID_ID)
+        } catch (e: Exception) {
+            null
+        }
+        val clean = androidId.orEmpty().filter { it.isLetterOrDigit() }.lowercase(Locale.US)
+        if (clean.length >= 8) return clean.take(8)
+        val p = prefs(c)
+        p.getString("device_id", null)?.let { return it }
+        val made = UUID.randomUUID().toString().replace("-", "").take(8)
+        p.edit().putString("device_id", made).apply()
+        return made
+    }
+
+    /** The name of this phone or tablet, as set in its Settings (like "Galaxy Tab S9"). */
+    fun deviceName(c: Context): String {
+        val given = try {
+            Settings.Global.getString(c.contentResolver, Settings.Global.DEVICE_NAME)
+        } catch (e: Exception) {
+            null
+        }
+        val name = given.orEmpty().trim().ifBlank { "${Build.MANUFACTURER} ${Build.MODEL}".trim() }
+        return name.take(36)
+    }
+
     // ───── Backup ─────
     /** Uploads today's copy of the records and any new photos. Returns a short message. */
     fun backup(c: Context, db: ClinicDb, token: String, progress: (String) -> Unit): String =
         synchronized(lock) { runBackup(c, db, token, progress) }
 
     private fun runBackup(c: Context, db: ClinicDb, token: String, progress: (String) -> Unit): String {
-        if (db.patientCount() == 0) throw IOException("There are no patients to back up yet")
+        val patients = db.patientCount()
+        if (patients == 0) throw IOException("There are no patients to back up yet")
         progress("Preparing backup…")
         val folder = findFolder(token, FOLDER_NAME, null) ?: createFolder(token, FOLDER_NAME, null)
         val photosFolder = findFolder(token, "photos", folder) ?: createFolder(token, "photos", folder)
 
         progress("Uploading patient records…")
+        val me = deviceId(c)
         val snapshot = File(c.cacheDir, "drive_snapshot.db")
         copyDatabase(c, db, snapshot)
-        val todayName = "clinic_" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + ".db"
-        val newId = uploadFile(token, todayName, folder, "application/octet-stream", snapshot)
+        // The file name carries this device's code, so another device's backup is never replaced
+        val todayName = "clinic_" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + "_" + me + ".db"
+        val props = mapOf("device" to deviceName(c), "deviceId" to me, "patients" to patients.toString())
+        val newId = uploadFile(token, todayName, folder, "application/octet-stream", snapshot, props)
         snapshot.delete()
-        val dbFiles = listFiles(token, "'$folder' in parents and trashed=false and mimeType!='$FOLDER_MIME'")
-            .filter { it.name.startsWith("clinic_") && it.name.endsWith(".db") }
-        dbFiles.filter { it.name == todayName && it.id != newId }.forEach { delete(token, it.id) }
-        dbFiles.filter { it.name != todayName }.sortedByDescending { it.name }.drop(14).forEach { delete(token, it.id) }
+        val mine = listFiles(token, "'$folder' in parents and trashed=false and mimeType!='$FOLDER_MIME'")
+            .filter { it.name.startsWith("clinic_") && it.name.endsWith("_" + me + ".db") }
+        mine.filter { it.name == todayName && it.id != newId }.forEach { delete(token, it.id) }
+        mine.filter { it.name != todayName }.sortedByDescending { it.name }.drop(14).forEach { delete(token, it.id) }
 
         val uploaded = listFiles(token, "'$photosFolder' in parents and trashed=false").map { it.name }.toHashSet()
         val pending = photoDir(c).listFiles()?.filter { it.name !in uploaded } ?: emptyList()
@@ -123,33 +173,68 @@ object DriveBackup {
         return if (pending.isEmpty()) "Backup complete ✓" else "Backup complete ✓  (${pending.size} new photos)"
     }
 
+    // ───── Finding backups ─────
+    /** Every backup on this Google account, newest first, from all phones and tablets. */
+    fun listBackups(c: Context, token: String): List<DriveBackupItem> = scanBackups(token, deviceId(c))
+
     /** Date of the newest backup on Drive (like "2026-10-23"), or null if there is none. */
-    fun latestBackupDate(token: String): String? {
-        val folder = findFolder(token, FOLDER_NAME, null) ?: return null
-        return listFiles(token, "'$folder' in parents and trashed=false and mimeType!='$FOLDER_MIME'")
-            .map { it.name }
-            .filter { it.startsWith("clinic_") && it.endsWith(".db") }
-            .maxOrNull()
-            ?.removePrefix("clinic_")?.removeSuffix(".db")
+    fun latestBackupDate(token: String): String? =
+        scanBackups(token, "").firstOrNull()?.name?.removePrefix("clinic_")?.take(10)
+
+    private fun scanBackups(token: String, me: String): List<DriveBackupItem> {
+        // The backup folder, plus any older one made before the clinic name was corrected
+        val folders = listFiles(token, "mimeType='$FOLDER_MIME' and trashed=false")
+            .filter { it.name.contains("Backup", ignoreCase = true) }
+        val result = mutableListOf<DriveBackupItem>()
+        for (folder in folders) {
+            val q = "'${folder.id}' in parents and trashed=false and mimeType!='$FOLDER_MIME'"
+            for (f in listJson(token, q, "id,name,modifiedTime,appProperties")) {
+                val name = f.optString("name")
+                if (!name.startsWith("clinic_") || !name.endsWith(".db")) continue
+                val props = f.optJSONObject("appProperties")
+                val fromId = props?.optString("deviceId").orEmpty()
+                result.add(
+                    DriveBackupItem(
+                        id = f.getString("id"),
+                        name = name,
+                        folderId = folder.id,
+                        device = props?.optString("device").orEmpty().ifBlank { "Older backup" },
+                        patients = props?.optString("patients")?.toIntOrNull() ?: -1,
+                        time = parseTime(f.optString("modifiedTime")),
+                        thisDevice = fromId.isNotEmpty() && fromId == me
+                    )
+                )
+            }
+        }
+        return result.sortedByDescending { it.time }
+    }
+
+    private fun parseTime(s: String): Long = try {
+        Instant.parse(s).toEpochMilli()
+    } catch (e: Exception) {
+        0L
     }
 
     // ───── Restore ─────
-    fun restore(c: Context, db: ClinicDb, token: String, progress: (String) -> Unit): Boolean =
-        synchronized(lock) { runRestore(c, db, token, progress) }
-
-    private fun runRestore(c: Context, db: ClinicDb, token: String, progress: (String) -> Unit): Boolean {
+    /** Brings back the newest backup from any device. */
+    fun restore(c: Context, db: ClinicDb, token: String, progress: (String) -> Unit): Boolean {
         progress("Looking for your backup…")
-        val folder = findFolder(token, FOLDER_NAME, null) ?: return false
-        val latest = listFiles(token, "'$folder' in parents and trashed=false and mimeType!='$FOLDER_MIME'")
-            .filter { it.name.startsWith("clinic_") && it.name.endsWith(".db") }
-            .maxByOrNull { it.name } ?: return false
+        val newest = listBackups(c, token).firstOrNull() ?: return false
+        return restoreItem(c, db, token, newest, progress)
+    }
+
+    /** Brings back the chosen backup. Everything in the app is replaced. */
+    fun restoreItem(c: Context, db: ClinicDb, token: String, item: DriveBackupItem, progress: (String) -> Unit): Boolean =
+        synchronized(lock) { runRestore(c, db, token, item, progress) }
+
+    private fun runRestore(c: Context, db: ClinicDb, token: String, item: DriveBackupItem, progress: (String) -> Unit): Boolean {
         val temp = File(c.cacheDir, "drive_restore").apply {
             deleteRecursively()
             mkdirs()
         }
         progress("Downloading patient records…")
-        download(token, latest.id, File(temp, "clinic.db"))
-        val photosFolder = findFolder(token, "photos", folder)
+        download(token, item.id, File(temp, "clinic.db"))
+        val photosFolder = findFolder(token, "photos", item.folderId)
         if (photosFolder != null) {
             val photos = listFiles(token, "'$photosFolder' in parents and trashed=false")
             val dir = File(temp, "photos").apply { mkdirs() }
@@ -250,28 +335,39 @@ object DriveBackup {
         return JSONObject(readResponse(conn)).getString("id")
     }
 
-    private fun listFiles(token: String, query: String): List<DriveFile> {
-        val result = mutableListOf<DriveFile>()
+    private fun listJson(token: String, query: String, fields: String): List<JSONObject> {
+        val result = mutableListOf<JSONObject>()
         var pageToken: String? = null
         do {
-            var url = "$API/files?q=" + enc(query) + "&fields=" + enc("nextPageToken,files(id,name,size)") +
+            var url = "$API/files?q=" + enc(query) + "&fields=" + enc("nextPageToken,files($fields)") +
                 "&pageSize=1000&spaces=drive"
             val current = pageToken
             if (current != null) url += "&pageToken=" + enc(current)
             val json = JSONObject(get(token, url))
             val files = json.optJSONArray("files") ?: JSONArray()
-            for (i in 0 until files.length()) {
-                val f = files.getJSONObject(i)
-                result.add(DriveFile(f.getString("id"), f.optString("name"), f.optString("size", "0").toLongOrNull() ?: 0L))
-            }
+            for (i in 0 until files.length()) result.add(files.getJSONObject(i))
             pageToken = json.optString("nextPageToken", "").ifBlank { null }
         } while (pageToken != null)
         return result
     }
 
-    private fun uploadFile(token: String, name: String, parent: String, mime: String, file: File): String {
+    private fun listFiles(token: String, query: String): List<DriveFile> =
+        listJson(token, query, "id,name,size").map { f ->
+            DriveFile(f.getString("id"), f.optString("name"), f.optString("size", "0").toLongOrNull() ?: 0L)
+        }
+
+    private fun uploadFile(
+        token: String,
+        name: String,
+        parent: String,
+        mime: String,
+        file: File,
+        props: Map<String, String> = emptyMap()
+    ): String {
         val boundary = "clinic" + System.nanoTime()
-        val meta = JSONObject().put("name", name).put("parents", JSONArray().put(parent)).toString()
+        val metaJson = JSONObject().put("name", name).put("parents", JSONArray().put(parent))
+        if (props.isNotEmpty()) metaJson.put("appProperties", JSONObject(props))
+        val meta = metaJson.toString()
         val head = ("--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n$meta\r\n" +
             "--$boundary\r\nContent-Type: $mime\r\n\r\n").toByteArray(Charsets.UTF_8)
         val tail = "\r\n--$boundary--\r\n".toByteArray(Charsets.UTF_8)
