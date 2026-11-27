@@ -32,7 +32,7 @@ android {
             signingConfig = signingConfigs.getByName("clinic")
         }
         // The TEST app: its own name and its own data, installed next to the clinic app
-        create("tester") {
+        create("sandbox") {
             initWith(getByName("release"))
             applicationIdSuffix = ".test"
             versionNameSuffix = "-test"
