@@ -1,0 +1,81 @@
+name: Build TEST app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CLINIC_STORE_PASSWORD: ${{ secrets.CLINIC_STORE_PASSWORD }}
+      CLINIC_KEY_PASSWORD: ${{ secrets.CLINIC_KEY_PASSWORD }}
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v5
+
+      - name: Check the signing key and passwords
+        run: |
+          if [ -z "$CLINIC_STORE_PASSWORD" ] || [ -z "$CLINIC_KEY_PASSWORD" ]; then
+            echo "::error::Add the CLINIC_STORE_PASSWORD and CLINIC_KEY_PASSWORD secrets (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          if [ ! -f app/clinic.keystore ]; then
+            echo "::error::The signing key is missing. Run Build APK for the clinic app once first."
+            exit 1
+          fi
+
+      - name: Install Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Add clinic logo
+        run: |
+          shopt -s nullglob nocaseglob
+          files=( *.png *.jpg *.jpeg *.webp )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::Logo not found. Upload your logo image (PNG or JPG) to the main page of the repository."
+            exit 1
+          fi
+          logo="${files[0]}"
+          mime=$(file --mime-type -b "$logo")
+          case "$mime" in
+            image/png) ext=png ;;
+            image/jpeg) ext=jpg ;;
+            image/webp) ext=webp ;;
+            *) echo "::error::The logo must be a PNG or JPG image (found $mime)."; exit 1 ;;
+          esac
+          mkdir -p app/src/main/res/drawable-xxhdpi
+          cp "$logo" "app/src/main/res/drawable-xxhdpi/clinic_logo.$ext"
+          echo "Using logo: $logo"
+
+      - name: Fonts (downloaded only if they are not in the repo)
+        run: |
+          mkdir -p app/src/main/res/font
+          for w in Regular Medium SemiBold Bold; do
+            name=$(echo "$w" | tr '[:upper:]' '[:lower:]')
+            f="app/src/main/res/font/poppins_$name.ttf"
+            if [ ! -f "$f" ]; then
+              curl -fsSL -o "$f" "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-$w.ttf"
+            fi
+          done
+
+      - name: Full version (no trial)
+        run: |
+          printf 'package com.mahalakshmi.dental\n\n// Written by the Build TEST app workflow. 0 = full version.\nconst val TRIAL_UNTIL = 0L\nconst val TRIAL_CONTACT = ""\n' > app/src/main/java/com/mahalakshmi/dental/TrialConfig.kt
+
+      - name: Build the TEST app
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
+          unzip -q gradle-8.11.1-bin.zip -d $HOME/gradle
+          $HOME/gradle/gradle-8.11.1/bin/gradle assembleTester --no-daemon
+
+      - name: Upload the TEST app
+        uses: actions/upload-artifact@v6
+        with:
+          name: Mahalaxmi-TEST-APK
+          path: app/build/outputs/apk/tester/*.apk
