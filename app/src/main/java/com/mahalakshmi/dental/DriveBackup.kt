@@ -268,6 +268,7 @@ object DriveBackup {
             temp.deleteRecursively()
             return false
         }
+        RestoreSafety.keepForReplace(c, db)   // keeps this phone's data, so the restore can be undone
         db.close()
         val dbFile = c.getDatabasePath(ClinicDb.NAME)
         listOf("", "-journal", "-wal", "-shm").forEach { File(dbFile.path + it).delete() }
@@ -281,6 +282,50 @@ object DriveBackup {
         }
         temp.deleteRecursively()
         return true
+    }
+
+    // ───── Add patients from another phone ─────
+    /** Downloads another phone's backup and works out what would be added. Nothing is changed yet. */
+    fun planAdd(c: Context, db: ClinicDb, token: String, item: DriveBackupItem, progress: (String) -> Unit): PatientAddPlan =
+        synchronized(lock) {
+            val temp = File(c.cacheDir, "drive_add").apply {
+                deleteRecursively()
+                mkdirs()
+            }
+            progress("Downloading the backup…")
+            download(token, item.id, File(temp, "clinic.db"))
+            progress("Checking patients…")
+            PatientMerge.plan(File(temp, "clinic.db"), db)
+        }
+
+    /** Adds the new patients from that backup, with their photos. Returns how many patients were added. */
+    fun finishAdd(
+        c: Context,
+        db: ClinicDb,
+        token: String,
+        item: DriveBackupItem,
+        plan: PatientAddPlan,
+        progress: (String) -> Unit
+    ): Int = synchronized(lock) {
+        val temp = File(c.cacheDir, "drive_add").apply { mkdirs() }
+        val dbFile = File(temp, "clinic.db")
+        if (!dbFile.exists()) download(token, item.id, dbFile)
+        val photos = File(temp, "photos").apply { mkdirs() }
+        if (plan.photos.isNotEmpty()) {
+            val folder = findFolder(token, "photos", item.folderId)
+            if (folder != null) {
+                val wanted = listFiles(token, "'$folder' in parents and trashed=false").filter { it.name in plan.photos }
+                wanted.forEachIndexed { i, f ->
+                    progress("Downloading photos ${i + 1} of ${wanted.size}…")
+                    download(token, f.id, File(photos, f.name))
+                }
+            }
+        }
+        progress("Adding patients…")
+        RestoreSafety.keepForAdd(c, db)
+        val added = PatientMerge.apply(c, db, dbFile, photos, plan.photos)
+        temp.deleteRecursively()
+        added
     }
 
     // ───── Talking to Google Drive ─────

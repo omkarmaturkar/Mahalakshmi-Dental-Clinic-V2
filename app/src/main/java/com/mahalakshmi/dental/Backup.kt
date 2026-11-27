@@ -145,6 +145,45 @@ object Backup {
         } catch (e: Exception) { false }
     }
 
+    // ---------- Add patients from another phone's .zip file ----------
+    private fun addTemp(c: Context) = File(c.cacheDir, "zip_add")
+
+    /** Opens another phone's .zip backup and works out what would be added. Nothing is changed yet. */
+    fun planAddZip(c: Context, db: ClinicDb, uri: Uri): PatientAddPlan = synchronized(lock) {
+        val temp = addTemp(c).apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        c.contentResolver.openInputStream(uri)!!.use { input ->
+            ZipInputStream(input.buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val n = entry.name
+                    if (!entry.isDirectory && !n.contains("..") && (n == "clinic.db" || n.startsWith("photos/"))) {
+                        val t = File(temp, n)
+                        t.parentFile?.mkdirs()
+                        t.outputStream().use { zip.copyTo(it) }
+                    }
+                    entry = zip.nextEntry
+                }
+            }
+        }
+        val dbFile = File(temp, "clinic.db")
+        if (!dbFile.exists()) throw IllegalStateException("This is not a valid clinic backup")
+        PatientMerge.plan(dbFile, db)
+    }
+
+    /** Adds the new patients from the file opened by planAddZip. Returns how many patients were added. */
+    fun finishAddZip(c: Context, db: ClinicDb, plan: PatientAddPlan): Int = synchronized(lock) {
+        val temp = addTemp(c)
+        val dbFile = File(temp, "clinic.db")
+        if (!dbFile.exists()) throw IllegalStateException("Open the backup file again")
+        RestoreSafety.keepForAdd(c, db)
+        val added = PatientMerge.apply(c, db, dbFile, File(temp, "photos"), plan.photos)
+        temp.deleteRecursively()
+        added
+    }
+
     // ---------- Helpers ----------
     private fun copyDb(c: Context, db: ClinicDb, out: OutputStream) {
         val sql = db.writableDatabase
@@ -159,6 +198,7 @@ object Backup {
         val valid = newDb.exists() && newDb.inputStream().use { it.read(header) == 16 } &&
             String(header, Charsets.US_ASCII).startsWith("SQLite format 3")
         if (!valid) { temp.deleteRecursively(); return false }
+        RestoreSafety.keepForReplace(c, db)   // keeps this phone's data, so the restore can be undone
         db.close()
         val dbFile = c.getDatabasePath(ClinicDb.NAME)
         listOf("", "-journal", "-wal", "-shm").forEach { File(dbFile.path + it).delete() }

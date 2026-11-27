@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
@@ -39,6 +40,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** "1 patient", "25 patients" */
+private fun patientsText(n: Int): String = if (n == 1) "1 patient" else "$n patients"
+
+/** The message shown before a backup replaces everything on this phone. */
+private fun replaceText(here: Int, what: String): String =
+    "This phone has ${patientsText(here)}. Everything will be replaced with $what." +
+        (if (here > 0) "\n\nA copy of this phone's data is kept, so you can undo this." else "")
+
+/** A request to add patients: where they come from, what will happen, and what runs when confirmed. */
+private class AddAsk(val from: String, val plan: PatientAddPlan, val action: () -> Unit)
+
 @Composable
 fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
     val context = LocalContext.current
@@ -48,6 +60,10 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
     var busy by remember { mutableStateOf<String?>(null) }
     var confirm by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
     var choices by remember { mutableStateOf<List<DriveBackupItem>?>(null) }
+    var picked by remember { mutableStateOf<DriveBackupItem?>(null) }
+    var replaceItem by remember { mutableStateOf<DriveBackupItem?>(null) }
+    var addAsk by remember { mutableStateOf<AddAsk?>(null) }
+    var askUndo by remember { mutableStateOf(false) }
     val deviceLabel = remember { DriveBackup.deviceName(context) }
 
     var folder by remember { mutableStateOf(Backup.autoFolderName(context)) }
@@ -57,6 +73,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
     var driveLast by remember { mutableLongStateOf(DriveBackup.lastBackup(context)) }
     var autoDaily by remember { mutableStateOf(DriveBackup.autoEnabled(context)) }
     var mobileData by remember { mutableStateOf(DriveBackup.useMobileData(context)) }
+    var undoReady by remember { mutableStateOf(RestoreSafety.available(context)) }
 
     fun refresh() {
         folder = Backup.autoFolderName(context)
@@ -64,6 +81,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
         driveOn = DriveBackup.isConnected(context)
         account = DriveBackup.account(context)
         driveLast = DriveBackup.lastBackup(context)
+        undoReady = RestoreSafety.available(context)
         DataBus.changed()
     }
 
@@ -78,6 +96,13 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             refresh()
             done(result)
         }
+    }
+
+    // After a restore or an undo, the app restarts so every screen shows the right data
+    fun afterRestore(message: String) {
+        notify(message)
+        onRestored()
+        restartAfterRestore(context)
     }
 
     // ───── Google sign-in ─────
@@ -127,9 +152,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             work("Restoring from Google Drive…", { progress -> DriveBackup.restoreItem(context, db, token, item, progress) }) { r ->
                 when {
                     r.getOrNull() == true -> {
-                        notify("Data restored ✓  The app will restart now")
-                        onRestored()
-                        restartAfterRestore(context)
+                        afterRestore("Data restored ✓  The app will restart now")
                     }
                     r.isFailure -> {
                         notify(friendlyError(r.exceptionOrNull()))
@@ -139,6 +162,39 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+
+    // Adds the new patients from another phone's Drive backup, after showing what will happen
+    fun driveAdd(item: DriveBackupItem) {
+        withDriveToken { token ->
+            work("Checking the backup…", { progress -> DriveBackup.planAdd(context, db, token, item, progress) }) { r ->
+                val plan = r.getOrNull()
+                when {
+                    plan == null -> {
+                        notify(friendlyError(r.exceptionOrNull()))
+                    }
+                    plan.newPatients == 0 -> {
+                        notify("All patients in this backup are already on this phone")
+                    }
+                    else -> {
+                        addAsk = AddAsk(item.device, plan) {
+                            withDriveToken { token2 ->
+                                work("Adding patients…", { progress -> DriveBackup.finishAdd(context, db, token2, item, plan, progress) }) { r2 ->
+                                    val added = r2.getOrNull()
+                                    notify(if (added != null) "${patientsText(added)} added ✓" else friendlyError(r2.exceptionOrNull()))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun undoNow() {
+        work("Bringing back the earlier data…", { _ -> RestoreSafety.undo(context, db) }) { r ->
+            if (r.getOrNull() == true) afterRestore("Done ✓  The app will restart now") else notify("There is nothing to undo")
         }
     }
 
@@ -222,12 +278,10 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
     }
     val restoreFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
-            confirm = "Everything in the app will be replaced with the data from this backup folder." to {
+            confirm = replaceText(db.patientCount(), "the data from this backup folder") to {
                 work("Restoring…", { _ -> Backup.restoreFromFolder(context, db, uri) }) { r ->
                     if (r.getOrNull() == true) {
-                        notify("Data restored ✓  The app will restart now")
-                        onRestored()
-                        restartAfterRestore(context)
+                        afterRestore("Data restored ✓  The app will restart now")
                     } else {
                         notify("This is not a valid clinic backup")
                     }
@@ -237,14 +291,35 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
     }
     val restoreZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            confirm = "Everything in the app will be replaced with the data from this backup file." to {
+            confirm = replaceText(db.patientCount(), "the data from this backup file") to {
                 work("Restoring…", { _ -> Backup.restoreZip(context, db, uri) }) { r ->
                     if (r.getOrNull() == true) {
-                        notify("Data restored ✓  The app will restart now")
-                        onRestored()
-                        restartAfterRestore(context)
+                        afterRestore("Data restored ✓  The app will restart now")
                     } else {
                         notify("This is not a valid clinic backup")
+                    }
+                }
+            }
+        }
+    }
+    val addZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            work("Checking the backup file…", { _ -> Backup.planAddZip(context, db, uri) }) { r ->
+                val plan = r.getOrNull()
+                when {
+                    plan == null -> {
+                        notify(friendlyError(r.exceptionOrNull()))
+                    }
+                    plan.newPatients == 0 -> {
+                        notify("All patients in this file are already on this phone")
+                    }
+                    else -> {
+                        addAsk = AddAsk("this file", plan) {
+                            work("Adding patients…", { _ -> Backup.finishAddZip(context, db, plan) }) { r2 ->
+                                val added = r2.getOrNull()
+                                notify(if (added != null) "${patientsText(added)} added ✓" else friendlyError(r2.exceptionOrNull()))
+                            }
+                        }
                     }
                 }
             }
@@ -254,6 +329,20 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize().background(Brand.Bg)) {
         val twoColumn = maxWidth >= 760.dp
 
+        val undoSection: @Composable () -> Unit = {
+            if (undoReady) {
+                val count = RestoreSafety.patients(context)
+                val time = RestoreSafety.time(context)
+                FormCard(
+                    "Undo last restore",
+                    "Brings back the ${patientsText(count)} this phone had" + (if (time > 0L) " on ${fmtDateTime(time)}" else "")
+                ) {
+                    SoftButton("Undo last restore", Icons.Filled.Refresh, Modifier.fillMaxWidth(), bg = Brand.GoldSoft, fg = Brand.GoldDeep) {
+                        askUndo = true
+                    }
+                }
+            }
+        }
         val driveSection: @Composable () -> Unit = {
             AppCard(Modifier.fillMaxWidth(), padding = 0.dp) {
                 Row(
@@ -342,12 +431,15 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             }
         }
         val restoreSection: @Composable () -> Unit = {
-            FormCard("Restore from a file", "Use on a new tablet or after reinstalling. This replaces all current data.") {
+            FormCard("Restore from a file", "Replace all data from a backup, or add the patients from another phone's .zip file") {
                 SoftButton("Restore from backup folder", AppIcons.Cloud, Modifier.fillMaxWidth(), bg = Brand.Soft, fg = Brand.Ink) {
                     restoreFolder.launch(null)
                 }
                 SoftButton("Restore from .zip file", Icons.Filled.Refresh, Modifier.fillMaxWidth(), bg = Brand.Soft, fg = Brand.Ink) {
                     restoreZip.launch(arrayOf("*/*"))
+                }
+                SoftButton("Add patients from a .zip file", Icons.Filled.Add, Modifier.fillMaxWidth(), bg = Brand.Soft, fg = Brand.Ink) {
+                    addZip.launch(arrayOf("*/*"))
                 }
             }
         }
@@ -363,7 +455,10 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
                             .navigationBarsPadding().padding(vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(18.dp)
-                    ) { driveSection() }
+                    ) {
+                        undoSection()
+                        driveSection()
+                    }
                     Column(
                         Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())
                             .navigationBarsPadding().padding(vertical = 8.dp),
@@ -379,6 +474,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
                         .padding(horizontal = 20.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    undoSection()
                     driveSection()
                     localSection()
                     restoreSection()
@@ -402,12 +498,73 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
             list,
             onPick = { item ->
                 choices = null
-                val whenText = if (item.time > 0L) fmtDateTime(item.time) else "an earlier date"
-                confirm = "Everything in the app will be replaced with the backup from ${item.device} ($whenText)." to {
-                    driveRestore(item)
-                }
+                picked = item
             },
             onDismiss = { choices = null }
+        )
+    }
+    picked?.let { item ->
+        BackupActionDialog(
+            item,
+            onAdd = {
+                picked = null
+                driveAdd(item)
+            },
+            onReplace = {
+                picked = null
+                replaceItem = item
+            },
+            onDismiss = { picked = null }
+        )
+    }
+    replaceItem?.let { item ->
+        val here = db.patientCount()
+        val whenText = if (item.time > 0L) fmtDateTime(item.time) else "an earlier date"
+        val theirs = if (item.patients >= 0) patientsText(item.patients) else "the patients"
+        val fewer = item.patients in 0 until here
+        val text = buildString {
+            append("This phone has ${patientsText(here)}. They will be replaced by $theirs from ${item.device} ($whenText).")
+            if (fewer) append("\n\nThis backup has fewer patients. ${patientsText(here - item.patients)} would be removed from this phone.")
+            if (here > 0) append("\n\nA copy of this phone's data is kept, so you can undo this.")
+        }
+        ConfirmDialog(
+            "Replace this phone's data?", text, confirmText = "Replace", danger = fewer,
+            onConfirm = {
+                replaceItem = null
+                driveRestore(item)
+            },
+            onDismiss = { replaceItem = null }
+        )
+    }
+    addAsk?.let { ask ->
+        val plan = ask.plan
+        val names = plan.alreadyHere.take(5).joinToString(", ") +
+            (if (plan.alreadyHere.size > 5) " and ${plan.alreadyHere.size - 5} more" else "")
+        val text = buildString {
+            append("${patientsText(plan.newPatients)} from ${ask.from} will be added to this phone, with their treatments, payments, prescriptions and photos.")
+            if (plan.alreadyHere.isNotEmpty()) append("\n\nAlready on this phone, left as they are: $names.")
+            append("\n\nAdded patients get new Patient IDs on this phone. A copy of this phone's data is kept, so you can undo this.")
+        }
+        ConfirmDialog(
+            "Add ${patientsText(plan.newPatients)}?", text, confirmText = "Add patients", danger = false,
+            onConfirm = {
+                addAsk = null
+                ask.action()
+            },
+            onDismiss = { addAsk = null }
+        )
+    }
+    if (askUndo) {
+        ConfirmDialog(
+            "Undo last restore?",
+            "This phone goes back to the ${patientsText(RestoreSafety.patients(context))} it had before. " +
+                "Anything restored or added after that is removed from this phone.",
+            confirmText = "Undo", danger = false,
+            onConfirm = {
+                askUndo = false
+                undoNow()
+            },
+            onDismiss = { askUndo = false }
         )
     }
     busy?.let { BusyDialog(it) }
@@ -425,6 +582,9 @@ private fun friendlyError(e: Throwable?): String {
     val msg = e?.message ?: ""
     return when {
         msg.startsWith("There are no patients") -> msg
+        msg.startsWith("Update both phones") -> msg
+        msg.startsWith("This is not a valid") -> msg
+        msg.startsWith("Open the backup file") -> msg
         msg.contains("401") || msg.contains("403") -> "Google Drive refused access. Tap Disconnect, then connect again."
         else -> "Something went wrong. Please check the internet and try again."
     }
@@ -440,7 +600,7 @@ private fun BackupChoiceDialog(items: List<DriveBackupItem>, onPick: (DriveBacku
             Text("Choose a backup", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
             Spacer(Modifier.height(4.dp))
             Text(
-                "Each phone and tablet keeps its own backups. Tap the one to bring back.",
+                "Each phone and tablet keeps its own backups. Tap one to add its patients or to restore it.",
                 fontSize = 14.sp, color = Brand.Sub
             )
             Spacer(Modifier.height(14.dp))
@@ -449,11 +609,7 @@ private fun BackupChoiceDialog(items: List<DriveBackupItem>, onPick: (DriveBacku
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items.forEach { item ->
-                    val count = when {
-                        item.patients < 0 -> ""
-                        item.patients == 1 -> "  ·  1 patient"
-                        else -> "  ·  ${item.patients} patients"
-                    }
+                    val count = if (item.patients < 0) "" else "  ·  " + patientsText(item.patients)
                     Column(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brand.Soft)
                             .clickable { onPick(item) }.padding(14.dp)
@@ -475,6 +631,42 @@ private fun BackupChoiceDialog(items: List<DriveBackupItem>, onPick: (DriveBacku
                     }
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Cancel", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Brand.Ink,
+                modifier = Modifier.align(Alignment.End).clip(RoundedCornerShape(10.dp)).clickable { onDismiss() }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
+// After picking a backup: add its patients to this phone, or replace everything
+@Composable
+private fun BackupActionDialog(item: DriveBackupItem, onAdd: () -> Unit, onReplace: () -> Unit, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Brand.Surface).padding(22.dp)
+        ) {
+            Text(item.device, fontFamily = ClinicTitleFont, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
+            Text(
+                (if (item.time > 0L) fmtDateTime(item.time) else "Date not known") +
+                    (if (item.patients >= 0) "  ·  " + patientsText(item.patients) else ""),
+                fontSize = 14.sp, color = Brand.Sub
+            )
+            Spacer(Modifier.height(18.dp))
+            if (!item.thisDevice) {
+                GradientButton("Add its patients", Modifier.fillMaxWidth(), Icons.Filled.Add, height = 52.dp, onClick = onAdd)
+                Text(
+                    "New patients are added to this phone. Patients already here stay as they are.",
+                    fontSize = 13.sp, color = Brand.Sub, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp)
+                )
+            }
+            SoftButton("Replace everything", Icons.Filled.Refresh, Modifier.fillMaxWidth(), bg = Brand.RedSoft, fg = Brand.Red, onClick = onReplace)
+            Text(
+                "All data on this phone is replaced by this backup.",
+                fontSize = 13.sp, color = Brand.Sub, modifier = Modifier.padding(top = 6.dp)
+            )
             Spacer(Modifier.height(12.dp))
             Text(
                 "Cancel", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Brand.Ink,
