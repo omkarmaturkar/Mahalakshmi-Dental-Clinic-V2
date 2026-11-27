@@ -1,0 +1,26 @@
+name: tool-tables
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: List every table the app stores
+        run: |
+          python3 - <<'PY_END'
+          import glob
+          for p in sorted(glob.glob("app/src/main/**/*.kt", recursive=True)):
+              lines = open(p, encoding="utf-8").read().split("\n")
+              for i, l in enumerate(lines):
+                  if "CREATE TABLE" in l or "ALTER TABLE" in l or "UNIQUE" in l:
+                      chunk = " ".join(x.strip() for x in lines[i:i + 6])
+                      print(p.split("/")[-1] + ":" + str(i + 1) + ":  " + chunk[:700])
+          print("DONE")
+          PY_END
