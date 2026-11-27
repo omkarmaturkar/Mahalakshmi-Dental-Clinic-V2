@@ -52,7 +52,9 @@ data class Prescription(
     val medicines: List<Medicine> = emptyList(),
     val advice: String = "",
     val complaint: String = "",
-    val findings: String = ""
+    val findings: String = "",
+    val bp: String = "",
+    val sugar: String = ""
 )
 
 data class RxTemplate(val id: Long, val name: String, val medicines: List<Medicine>, val advice: String)
@@ -113,15 +115,18 @@ private fun ClinicDb.ensureRxColumns() {
     sql.rawQuery("PRAGMA table_info(prescriptions)", null).use { c -> while (c.moveToNext()) have.add(c.getString(1)) }
     if ("complaint" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN complaint TEXT")
     if ("findings" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN findings TEXT")
+    if ("bp" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN bp TEXT")
+    if ("sugar" !in have) sql.execSQL("ALTER TABLE prescriptions ADD COLUMN sugar TEXT")
     rxColumnsReady = sql
 }
 
-private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice, complaint, findings"
+private const val RX_COLS = "id, patient_id, visit_id, date, diagnosis, medicines, advice, complaint, findings, bp, sugar"
 
 private fun rxFrom(c: Cursor) = Prescription(
     id = c.getLong(0), patientId = c.getLong(1), visitId = c.getLong(2), date = c.getLong(3),
     diagnosis = c.getString(4) ?: "", medicines = medicinesFromJson(c.getString(5)), advice = c.getString(6) ?: "",
-    complaint = c.getString(7) ?: "", findings = c.getString(8) ?: ""
+    complaint = c.getString(7) ?: "", findings = c.getString(8) ?: "",
+    bp = c.getString(9) ?: "", sugar = c.getString(10) ?: ""
 )
 
 fun ClinicDb.getPrescriptionById(id: Long): Prescription? {
@@ -151,6 +156,8 @@ fun ClinicDb.savePrescription(rx: Prescription): Long {
         put("advice", rx.advice)
         put("complaint", rx.complaint)
         put("findings", rx.findings)
+        put("bp", rx.bp)
+        put("sugar", rx.sugar)
     }
     return if (rx.id == 0L) {
         writableDatabase.insert("prescriptions", null, cv)
@@ -228,20 +235,25 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
     var advice by remember { mutableStateOf(existing?.advice ?: "") }
     var complaint by remember { mutableStateOf(existing?.complaint ?: "") }
     var findings by remember { mutableStateOf(existing?.findings ?: "") }
+    var bp by remember { mutableStateOf(existing?.bp ?: "") }
+    var sugar by remember { mutableStateOf(existing?.sugar ?: "") }
+    val allergies = remember { allergiesIn(patient.alerts) }
+    var allergyCheck by remember { mutableStateOf<Triple<Int, Medicine, String>?>(null) }
     var templates by remember { mutableStateOf(db.rxTemplates()) }
     var editing by remember { mutableStateOf<Int?>(null) }
     var removingTemplates by remember { mutableStateOf(false) }
     var askTemplateName by remember { mutableStateOf(false) }
     var askDelete by remember { mutableStateOf(false) }
     var share by remember { mutableStateOf(false) }
-    val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank() || complaint.isNotBlank() || findings.isNotBlank()
+    val canSave = medicines.isNotEmpty() || diagnosis.isNotBlank() || advice.isNotBlank() || complaint.isNotBlank() || findings.isNotBlank() || bp.isNotBlank() || sugar.isNotBlank()
 
     fun save() {
         currentId = db.savePrescription(
             Prescription(
                 id = currentId, patientId = patientId, visitId = existing?.visitId ?: 0L, date = createdAt,
                 diagnosis = diagnosis.trim(), medicines = medicines.toList(), advice = advice.trim(),
-                complaint = complaint.trim(), findings = findings.trim()
+                complaint = complaint.trim(), findings = findings.trim(),
+                bp = bp.trim(), sugar = sugar.trim()
             )
         )
         if (existing == null) db.markArrived(patientId)
@@ -285,10 +297,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                     ) {
                         Icon(Icons.Filled.Warning, null, tint = Brand.Red, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Medical alerts: " + patient.alerts.joinToString(", "),
-                            fontSize = 13.sp, color = Brand.Red, fontWeight = FontWeight.Medium
-                        )
+                        AlertLines(patient.alerts)
                     }
                 }
             }
@@ -311,7 +320,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
         val medicinesCard: @Composable () -> Unit = {
             FormCard("Medicines", if (medicines.isEmpty()) "Add medicines or use a template" else "Tap a medicine to change it") {
                 medicines.forEachIndexed { i, m ->
-                    MedicineRow(i + 1, m, onEdit = { editing = i }, onRemove = { medicines.removeAt(i) })
+                    MedicineRow(i + 1, m, allergyClash(allergies, m.name), onEdit = { editing = i }, onRemove = { medicines.removeAt(i) })
                 }
                 GradientButton("Add medicine", Modifier.fillMaxWidth(), Icons.Filled.Add, height = 50.dp) { editing = -1 }
             }
@@ -382,7 +391,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                     ) {
                         patientCard()
                         ComplaintCard(complaint) { complaint = it }
-                        FindingsCard(findings) { findings = it }
+                        FindingsVitalsCard(findings, bp, sugar, { bp = it }, { sugar = it }) { findings = it }
                         repeatCard()
                         medicinesCard()
                         templatesCard()
@@ -403,7 +412,7 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
                 ) {
                     patientCard()
                     ComplaintCard(complaint) { complaint = it }
-                    FindingsCard(findings) { findings = it }
+                    FindingsVitalsCard(findings, bp, sugar, { bp = it }, { sugar = it }) { findings = it }
                     diagnosisCard()
                     repeatCard()
                     templatesCard()
@@ -441,9 +450,26 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
 
     editing?.let { index ->
         MedicineDialog(medicines.getOrNull(index), onDismiss = { editing = null }) { m ->
-            if (index in medicines.indices) medicines[index] = m else medicines.add(m)
+            val clash = allergyClash(allergies, m.name)
+            if (clash != null && medicines.getOrNull(index)?.name != m.name) {
+                allergyCheck = Triple(index, m, clash)
+            } else if (index in medicines.indices) medicines[index] = m else medicines.add(m)
             editing = null
         }
+    }
+    allergyCheck?.let { (index, m, clash) ->
+        AllergyWarningDialog(
+            patient.name, m.name, clash,
+            onKeepOut = { allergyCheck = null },
+            onAddAnyway = {
+                if (index in medicines.indices) {
+                    medicines[index] = m
+                } else {
+                    medicines.add(m)
+                }
+                allergyCheck = null
+            }
+        )
     }
     if (askTemplateName) {
         TemplateNameDialog(onDismiss = { askTemplateName = false }) { name ->
@@ -483,9 +509,9 @@ fun PrescriptionScreen(db: ClinicDb, patientId: Long, rxId: Long, onBack: () -> 
 }
 
 @Composable
-private fun MedicineRow(number: Int, m: Medicine, onEdit: () -> Unit, onRemove: () -> Unit) {
+private fun MedicineRow(number: Int, m: Medicine, clash: String?, onEdit: () -> Unit, onRemove: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Brand.Soft).clickable(onClick = onEdit).padding(12.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (clash != null) Brand.RedSoft else Brand.Soft).clickable(onClick = onEdit).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(Modifier.size(30.dp).clip(CircleShape).background(Brand.Surface), contentAlignment = Alignment.Center) {
@@ -494,6 +520,7 @@ private fun MedicineRow(number: Int, m: Medicine, onEdit: () -> Unit, onRemove: 
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(m.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Brand.Ink)
+            if (clash != null) Text("Allergy: $clash", fontSize = 13.sp, color = Brand.Red, fontWeight = FontWeight.SemiBold)
             val info = listOf(m.dose, m.timing, m.days).filter { it.isNotBlank() }.joinToString("  ·  ")
             if (info.isNotBlank()) Text(info, fontSize = 13.sp, color = Brand.GreenDeep, fontWeight = FontWeight.Medium)
             if (m.note.isNotBlank()) Text(m.note, fontSize = 12.sp, color = Brand.Sub)
@@ -632,15 +659,24 @@ fun prescriptionPdf(context: Context, db: ClinicDb, rxId: Long): File {
         )
     )
     if (patient.alerts.isNotEmpty()) {
-        pdf.text("Medical alerts: " + patient.alerts.joinToString(", "), 10f, PdfRed, 1, after = 8f)
+        val allergic = allergiesIn(patient.alerts)
+        val others = patient.alerts.filter { allergyName(it) == null }
+        if (allergic.isNotEmpty()) pdf.text("Allergic to: " + allergic.joinToString(", "), 10.5f, PdfRed, 2, after = 2f)
+        if (others.isNotEmpty()) pdf.text("Medical alerts: " + others.joinToString(", "), 10f, PdfRed, 1, after = 2f)
+        pdf.space(6f)
     }
     if (rx.complaint.isNotBlank()) {
         pdf.text("Chief complaint", 9.5f, PdfSub, 1, after = 1f)
         pdf.text(rx.complaint, 11f, after = 10f)
     }
-    if (rx.findings.isNotBlank()) {
+    val vitals = listOf(
+        if (rx.bp.isNotBlank()) "BP: " + rx.bp + " mmHg" else "",
+        if (rx.sugar.isNotBlank()) "Sugar: " + rx.sugar + " mg/dL" else ""
+    ).filter { it.isNotBlank() }.joinToString("   ·   ")
+    if (rx.findings.isNotBlank() || vitals.isNotBlank()) {
         pdf.text("On examination", 9.5f, PdfSub, 1, after = 1f)
-        pdf.text(rx.findings, 11f, after = 10f)
+        if (vitals.isNotBlank()) pdf.text(vitals, 11f, PdfInk, 1, after = if (rx.findings.isNotBlank()) 3f else 10f)
+        if (rx.findings.isNotBlank()) pdf.text(rx.findings, 11f, after = 10f)
     }
     if (rx.diagnosis.isNotBlank()) {
         pdf.text("Diagnosis / Treatment", 9.5f, PdfSub, 1, after = 1f)

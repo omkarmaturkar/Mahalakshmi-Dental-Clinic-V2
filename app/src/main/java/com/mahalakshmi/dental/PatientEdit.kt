@@ -125,14 +125,14 @@ fun PatientEditScreen(
                     }
                     FormCard("Medical alerts", "Shown in red at the top of the patient file") {
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            (medicalOptions + medical.filter { it !in medicalOptions }).forEach { m ->
+                            (medicalOptions + medical.filter { it !in medicalOptions && allergyName(it) == null }).forEach { m ->
                                 ChoiceChip(m, m in medical, selectedBg = Brand.Red) {
                                     if (m in medical) medical.remove(m) else medical.add(m)
                                 }
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AppField(otherAlert, { otherAlert = it }, "Other, e.g. Penicillin allergy", Modifier.weight(1f))
+                            AppField(otherAlert, { otherAlert = it }, "Other, e.g. Asthma", Modifier.weight(1f))
                             Spacer(Modifier.width(10.dp))
                             CircleIconButton(
                                 Icons.Filled.Add,
@@ -145,6 +145,7 @@ fun PatientEditScreen(
                             )
                         }
                     }
+                    AllergiesCard(medical)
                     if (more) {
                         FormCard("More details") {
                             AppField(notes, { notes = it }, "Address, referred by, other notes", lines = 3)
