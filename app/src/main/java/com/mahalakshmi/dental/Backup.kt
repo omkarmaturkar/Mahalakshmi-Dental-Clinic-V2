@@ -41,6 +41,7 @@ object Backup {
         synchronized(lock) { runAuto(c, db, force) }
 
     private fun runAuto(c: Context, db: ClinicDb, force: Boolean): Boolean {
+        if (isTestApp(c)) return false   // the TEST app never writes backups
         val p = prefs(c)
         val folder = p.getString("folder", null) ?: return false
         if (!force && System.currentTimeMillis() - p.getLong("lastAuto", 0L) < 30 * 60 * 1000L) return false

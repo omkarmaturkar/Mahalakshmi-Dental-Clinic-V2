@@ -12,8 +12,9 @@ android {
         applicationId = "com.mahalakshmi.dental"
         minSdk = 26
         targetSdk = 35
-        versionCode = 48
-        versionName = "48.0"
+        manifestPlaceholders["appLabel"] = "Mahalaxmi Dental Clinic"
+        versionCode = 49
+        versionName = "49.0"
     }
 
     signingConfigs {
@@ -29,6 +30,13 @@ android {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("clinic")
+        }
+        // The TEST app: its own name and its own data, installed next to the clinic app
+        create("tester") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            manifestPlaceholders["appLabel"] = "Mahalaxmi TEST"
         }
     }
 

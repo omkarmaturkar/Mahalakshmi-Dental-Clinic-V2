@@ -113,8 +113,8 @@ object Brand {
     val Bg: Color get() = if (d) Color(0xFF0F1412) else Color(0xFFF6F7F3)
     val Surface: Color get() = if (d) Color(0xFF1A211E) else Color.White
     val Ink: Color get() = if (d) Color(0xFFECF0EE) else Color(0xFF1D2321)
-    val Sub: Color get() = if (d) Color(0xFFA6AFAA) else Color(0xFF69716D)
-    val Faint: Color get() = if (d) Color(0xFF6E7873) else Color(0xFFA3AAA6)
+    val Sub: Color get() = if (d) Color(0xFFB4BCB8) else Color(0xFF555B59)
+    val Faint: Color get() = if (d) Color(0xFF86908B) else Color(0xFF8A918D)
     val Line: Color get() = if (d) Color(0xFF29312E) else Color(0xFFE9ECE6)
     val Soft: Color get() = if (d) Color(0xFF222A27) else Color(0xFFF1F3EE)
     val Red = Color(0xFFE5484D)
@@ -143,23 +143,30 @@ object DataBus {
 val LocalNotify = staticCompositionLocalOf<(String) -> Unit> { {} }
 
 // ───────────── Font & theme ─────────────
-val Poppins = FontFamily(
-    Font(R.font.poppins_regular, FontWeight.Normal),
-    Font(R.font.poppins_medium, FontWeight.Medium),
-    Font(R.font.poppins_semibold, FontWeight.SemiBold),
-    Font(R.font.poppins_bold, FontWeight.Bold)
+/** Lato for all text and Merriweather for titles: the pair chosen for the Home screen, now on every screen. */
+val ClinicTextFont = FontFamily(
+    Font(R.font.lato_regular, FontWeight.Normal),
+    Font(R.font.lato_bold, FontWeight.Bold)
+)
+val ClinicTitleFont = FontFamily(
+    Font(R.font.merriweather_regular, FontWeight.Normal),
+    Font(R.font.merriweather_bold, FontWeight.Bold)
 )
 
-private fun TextStyle.poppins(): TextStyle = copy(fontFamily = Poppins)
+/** Old name kept on purpose: every screen that still asks for Poppins now gets Lato. */
+val Poppins = ClinicTextFont
+
+private fun TextStyle.poppins(): TextStyle = copy(fontFamily = ClinicTextFont)
+private fun TextStyle.serifTitle(): TextStyle = copy(fontFamily = ClinicTitleFont)
 private val baseType = Typography()
 val AppTypography = Typography(
-    displayLarge = baseType.displayLarge.poppins(),
-    displayMedium = baseType.displayMedium.poppins(),
-    displaySmall = baseType.displaySmall.poppins(),
-    headlineLarge = baseType.headlineLarge.poppins(),
-    headlineMedium = baseType.headlineMedium.poppins(),
-    headlineSmall = baseType.headlineSmall.poppins(),
-    titleLarge = baseType.titleLarge.poppins(),
+    displayLarge = baseType.displayLarge.serifTitle(),
+    displayMedium = baseType.displayMedium.serifTitle(),
+    displaySmall = baseType.displaySmall.serifTitle(),
+    headlineLarge = baseType.headlineLarge.serifTitle(),
+    headlineMedium = baseType.headlineMedium.serifTitle(),
+    headlineSmall = baseType.headlineSmall.serifTitle(),
+    titleLarge = baseType.titleLarge.serifTitle(),
     titleMedium = baseType.titleMedium.poppins(),
     titleSmall = baseType.titleSmall.poppins(),
     bodyLarge = baseType.bodyLarge.poppins(),
@@ -203,8 +210,24 @@ fun ClinicTheme(content: @Composable () -> Unit) {
             outline = Color(0xFFD8DDD5), outlineVariant = Brand.Line, error = Brand.Red
         )
     }
-    MaterialTheme(colorScheme = scheme, typography = AppTypography) { ScaledForTablets(content) }
+    val testApp = isTestApp(LocalContext.current)
+    MaterialTheme(colorScheme = scheme, typography = AppTypography) {
+        ScaledForTablets {
+            if (testApp) {
+                // Gold strip behind the clock and battery: this is the TEST app, not the clinic app
+                Box(Modifier.fillMaxSize()) {
+                    content()
+                    Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(Brand.Gold))
+                }
+            } else {
+                content()
+            }
+        }
+    }
 }
+
+/** True in the TEST copy of the app, which has its own name and data and never writes backups. */
+fun isTestApp(context: Context): Boolean = context.packageName.endsWith(".test")
 
 /** dark = true gives dark icons (for light pages); false gives light icons (for dark pages). */
 @Composable
@@ -457,7 +480,7 @@ fun BrandRow(compact: Boolean = false) {
         LogoTile(if (compact) 46.dp else 54.dp)
         Spacer(Modifier.width(12.dp))
         Column {
-            Text("Mahalaxmi", fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Brand.Charcoal, lineHeight = 22.sp)
+            Text("Mahalaxmi", fontFamily = ClinicTitleFont, fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Brand.Charcoal, lineHeight = 22.sp)
             Text(
                 "DENTAL CLINIC", fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
                 color = Brand.GreenDeep, letterSpacing = 2.sp, lineHeight = 14.sp
@@ -514,7 +537,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Icon(AppIcons.Sparkle, null, tint = Brand.Gold, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(8.dp))
-        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.GreenText)
+        Text(title, fontFamily = ClinicTitleFont, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = Brand.GreenText)
     }
 }
 
@@ -757,7 +780,7 @@ fun AppTopBar(title: String, subtitle: String?, onBack: () -> Unit, actions: @Co
     ) {
         CircleIconButton(Icons.AutoMirrored.Filled.ArrowBack, onBack)
         Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 21.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, fontFamily = ClinicTitleFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, fontSize = 13.sp, color = Brand.Sub, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -785,8 +808,8 @@ fun FormCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     AppCard(modifier, padding = 22.dp) {
-        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText)
-        if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = Brand.Sub)
+        Text(title, fontFamily = ClinicTitleFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.GreenText)
+        if (subtitle != null) Text(subtitle, fontSize = 13.sp, color = Brand.Sub)
         Spacer(Modifier.height(16.dp))
         Column(verticalArrangement = Arrangement.spacedBy(14.dp), content = content)
     }
@@ -806,7 +829,7 @@ fun EmptyState(title: String, message: String) {
             )
         }
         Spacer(Modifier.height(16.dp))
-        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink, textAlign = TextAlign.Center)
+        Text(title, fontFamily = ClinicTitleFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink, textAlign = TextAlign.Center)
         Spacer(Modifier.height(4.dp))
         Text(message, fontSize = 14.sp, color = Brand.Sub, textAlign = TextAlign.Center)
     }
@@ -839,7 +862,7 @@ fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boo
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Brand.Ink)
-            if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = Brand.Sub)
+            if (subtitle != null) Text(subtitle, fontSize = 13.sp, color = Brand.Sub)
         }
         Spacer(Modifier.width(12.dp))
         Switch(
@@ -899,7 +922,7 @@ fun ConfirmDialog(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
+            Text(title, fontFamily = ClinicTitleFont, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = Brand.Ink)
             Spacer(Modifier.height(6.dp))
             Text(message, fontSize = 14.sp, color = Brand.Sub)
             Spacer(Modifier.height(24.dp))

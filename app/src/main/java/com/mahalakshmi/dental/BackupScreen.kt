@@ -193,6 +193,7 @@ fun BackupScreen(db: ClinicDb, onBack: () -> Unit, onRestored: () -> Unit) {
         work("Backing up…", { _ -> Backup.autoBackup(context, db, force = true) }) { r ->
             notify(
                 when {
+                    isTestApp(context) -> "Backups are off in the TEST app"
                     r.getOrNull() == true -> "Backup saved ✓"
                     db.patientCount() == 0 -> "Nothing to back up yet"
                     else -> "Backup failed – please choose the folder again"
