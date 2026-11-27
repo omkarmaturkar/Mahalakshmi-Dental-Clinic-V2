@@ -72,10 +72,10 @@ jobs:
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.11.1-bin.zip
           unzip -q gradle-8.11.1-bin.zip -d $HOME/gradle
-          $HOME/gradle/gradle-8.11.1/bin/gradle assembleTester --no-daemon
+          $HOME/gradle/gradle-8.11.1/bin/gradle assembleSandbox --no-daemon
 
       - name: Upload the TEST app
         uses: actions/upload-artifact@v6
         with:
           name: Mahalaxmi-TEST-APK
-          path: app/build/outputs/apk/tester/*.apk
+          path: app/build/outputs/apk/sandbox/*.apk
