@@ -173,9 +173,11 @@ fun ClinicDb.deleteDoctor(id: Long) {
 fun ClinicDb.clinicInfo(): ClinicInfo {
     val onBills = doctors().filter { it.onBills }
     val map = settingsMap()
+    // This app is only for Mahalaxmi Dental Clinic: the name is built in, and a name typed earlier is corrected once
+    if (map["clinic_name"] != DEFAULT_CLINIC_NAME) putSetting("clinic_name", DEFAULT_CLINIC_NAME)
     val withReg = onBills.filter { it.regNo.isNotBlank() }
     return ClinicInfo(
-        name = map["clinic_name"]?.takeIf { it.isNotBlank() } ?: DEFAULT_CLINIC_NAME,
+        name = DEFAULT_CLINIC_NAME,
         doctor = onBills.joinToString("  ·  ") { it.title },
         qualification = "",
         regNo = if (withReg.size == 1) withReg[0].regNo else withReg.joinToString("  ·  ") { "${it.name}: ${it.regNo}" },
@@ -236,7 +238,7 @@ fun ClinicSettingsScreen(db: ClinicDb, onBack: () -> Unit) {
 
         val clinicCard: @Composable () -> Unit = {
             FormCard("Clinic", "Changes are used on every new bill and prescription") {
-                AppField(name, { name = it }, "Clinic name *", icon = AppIcons.Tooth, caps = KeyboardCapitalization.Words)
+                Text(DEFAULT_CLINIC_NAME, fontFamily = ClinicTitleFont, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = Brand.Ink)
                 AppField(phone, { phone = it }, "Clinic phone", icon = Icons.Filled.Phone, type = KeyboardType.Phone)
                 AppField(
                     email, { email = it }, "Email (optional)", icon = Icons.Filled.Email,

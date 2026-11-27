@@ -13,8 +13,8 @@ android {
         minSdk = 26
         targetSdk = 35
         manifestPlaceholders["appLabel"] = "Mahalaxmi Dental Clinic"
-        versionCode = 49
-        versionName = "49.0"
+        versionCode = 50
+        versionName = "50.0"
     }
 
     signingConfigs {
